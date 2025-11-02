@@ -7738,9 +7738,10 @@ function onLoad(saved_data)
 end
 
 function print_changelog()
-  printToAll("Last update on 30 Oct 2025 - v4.02 \
+  printToAll("Last update on 02 Nov 2025 - v4.03 \
      - Enjoy the new map Hisui! \
      - Fixed shiny models maybe? <.< \
+     - Battle Arena counters now detect Reversal effects. You're welcome! \
      - Bug fixes",
   "Pink")
 end

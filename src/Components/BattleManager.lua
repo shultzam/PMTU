@@ -72,6 +72,21 @@ local levelDiceZOffset = 0.13
 local atkFieldEffect = {name = nil, guid = nil}
 local defFieldEffect = {name = nil, guid = nil}
 
+DEFAULT_ARENA_DATA = {
+  type = nil,
+  dice = {},
+  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, total=0, immune=false},
+  previousMove={},
+  canSelectMove=true,
+  selectedMoveIndex=-1,
+  selectedMoveData=nil,
+  diceMod=0,
+  addDice=0,
+  teraType=nil,
+  model_GUID=nil,
+  health_indicator_guid=nil
+}
+
 local attackerData = {
   type = nil,
   dice = {},
@@ -664,7 +679,7 @@ function flipGymLeader()
 
   -- Update the defender pokemon value counter.
   defenderData.attackValue.level = defenderPokemon.pokemon2.baseLevel
-  updateAttackValue(DEFENDER)
+  updateAttackValueCounter(DEFENDER)
 
   -- Get the rival token object handle.
   local gymLeaderCard = getObjectFromGUID(defenderData.trainerGUID)
@@ -860,18 +875,18 @@ function flipRivalPokemon()
       -- Update the pokemon data.
       attackerPokemon.teraType = teraData.type
       -- Create the Tera label.
-      local label = pokemonData.types[1]
-      if Global.call("getDualTypeEffectiveness") and pokemonData.types[2] then
-        label = label .. "/" .. pokemonData.types[2]
+      local label = attackerPokemon.pokemon2.types[1]
+      if Global.call("getDualTypeEffectiveness") and attackerPokemon.pokemon2.types[2] then
+        label = label .. "/" .. attackerPokemon.pokemon2.types[2]
       end
       -- Show the defender Tera button.
-      showDefenderTeraButton(true, label)
+      showAttackerTeraButton(true, label)
     end
   end
 
   -- Update the attacker value counter.
   attackerData.attackValue.level = attackerPokemon.baseLevel
-  updateAttackValue(ATTACKER)
+  updateAttackValueCounter(ATTACKER)
 
   -- Get the rival token object handle.
   local rivalCard = getObjectFromGUID(attackerPokemon.pokemonGUID)
@@ -1054,7 +1069,7 @@ function battleWildPokemon(wild_battle_params, is_automated)
 
     -- Update the defender value counter.
     defenderData.attackValue.level = defenderPokemon.baseLevel
-    updateAttackValue(DEFENDER)
+    updateAttackValueCounter(DEFENDER)
 
     aiDifficulty = Global.call("GetAIDifficulty")
 
@@ -1786,7 +1801,7 @@ function calculateFinalAttack(isAttacker)
 
   printToAll(calcString)
 
-  updateAttackValue(isAttacker)
+  updateAttackValueCounter(isAttacker)
 end
 
 
@@ -2041,6 +2056,43 @@ function defenseMove4()
   selectMove(4, DEFENDER)
 end
 
+-- Helper function used to determine an initial move power.
+function handleStringPowerLevels(pokemonData, selfPower, opponentPower)
+  if not pokemonData then
+    print("WARNING: nil pokemonData when determining power levels")
+    return 0
+  end
+
+  if type(pokemonData.attackValue.movePower) == "string" then 
+    if pokemonData.attackValue.movePower == status_ids.the_self then
+      return math.floor(selfPower / 2)
+    elseif pokemonData.attackValue.movePower == status_ids.enemy then
+      return math.floor(opponentPower / 2)
+    else
+      print("Unrecognized move power: " .. moveData.power)
+      return 0 
+    end
+  end
+
+  return pokemonData.attackValue.movePower
+end
+
+-- Helper function used to determine if a move has a specific effect.
+local function moveHasEffect(moveData, effectToFind)
+  if not moveData or not moveData.effects then
+    return false
+  end
+
+  -- Check for the desired effect.
+  for _, eff in pairs(moveData.effects) do
+    if eff and eff.name == effectToFind then
+        return true
+    end
+  end
+
+  return false
+end
+
 function selectMove(index, isAttacker, isRandom)
   -- For safety, sanitize the isRandom parameter.
   if isRandom == nil then
@@ -2056,12 +2108,14 @@ function selectMove(index, isAttacker, isRandom)
     pokemonData = attackerData
     moveData = attackerPokemon.movesData[index]
     attackerData.selectedMoveIndex = index
+    attackerData.selectedMoveData = moveData
     text = getObjectFromGUID(atkText)
   else
     pokemon = defenderPokemon
     pokemonData = defenderData
     moveData = defenderPokemon.movesData[index]
     defenderData.selectedMoveIndex = index
+    defenderData.selectedMoveData = moveData
     text = getObjectFromGUID(defText)
   end
 
@@ -2081,30 +2135,32 @@ function selectMove(index, isAttacker, isRandom)
   -- Update the appropriate move value.
   pokemonData.attackValue.movePower = moveData.power
 
-  -- Check if the Pokemon is using a move with Attack power of Self, Enemy or Sleep.
-  if type(pokemonData.attackValue.movePower) == "string" then 
-    if pokemonData.attackValue.movePower == status_ids.the_self then
-      pokemonData.attackValue.movePower = math.floor(pokemonData.attackValue.level / 2)
-    elseif pokemonData.attackValue.movePower == status_ids.enemy then
-      local opponentData = isAttacker and defenderData or attackerData
-      pokemonData.attackValue.movePower = math.floor(opponentData.attackValue.level / 2)
-    elseif pokemonData.attackValue.movePower == status_ids.sleep then
-      -- Check if the opponent is asleep.
-      local opponentPokemon = isAttacker and defenderPokemon or attackerPokemon
-      if opponentPokemon.status and opponentPokemon.status == status_ids.sleep then
-        pokemonData.attackValue.movePower = 2
-      else
-        pokemonData.attackValue.movePower = 0
-      end
-    else
-      print("Unrecognized move power: " .. moveData.power)
-      pokemonData.attackValue.movePower = 0 
-    end
-  end
+  -- Check if the Pokemon is using a move with Attack power of Self or Enemy.
+  local opponentData = isAttacker and defenderData or attackerData
+  pokemonData.attackValue.movePower = handleStringPowerLevels(pokemonData, pokemonData.attackValue.level, opponentData.attackValue.level)
 
   -- Stab. If the pokemon is the same type then add 1 to the attack power.
   if (moveData.type == pokemon.types[1] or moveData.type == pokemon.types[2]) and pokemonData.attackValue.movePower > 0 and moveData.STAB then 
     pokemonData.attackValue.movePower = pokemonData.attackValue.movePower + 1
+  end
+
+  -- Handle Reversal, for both Pokemon. :)
+  if not isAttacker then
+    -- We are the defender. Did the attacker use Reversal?
+    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
+      updateAttackValueCounter(ATTACKER)
+      print("Adjusting Attacker counter by " .. tostring(pokemonData.attackValue.movePower) .. " for the Reversal effect.")
+      adjustAttackValueCounter(ATTACKER, pokemonData.attackValue.movePower)
+    end
+    -- Do we have Reversal?
+    if moveHasEffect(moveData, status_ids.reversal) then
+      -- Get the opponent data. Make sure the Defender did not pick their move first like a dummy.
+      local opponentData = isAttacker and defenderData or attackerData
+      if opponentData and opponentData.attackValue.level then
+        pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
+        print("Adding " .. tostring(pokemonData.attackValue.movePower) .. " to Defender counter for the Reversal effect.")
+      end
+    end
   end
 
   -- Check for a few different attach cards.
@@ -2132,19 +2188,21 @@ function selectMove(index, isAttacker, isRandom)
 
   -- Calculate effectiveness.
   pokemonData.attackValue.effectiveness = DEFAULT
-  local oppenent_data = isAttacker and defenderPokemon or attackerPokemon
+  local opponent_data = isAttacker and defenderPokemon or attackerPokemon
+  -- If the defender chose a move first like a dummy (or attacker chose before defender is in place) the opponent data will be nil.
+  if not opponent_data then return end
 
   -- Get the opponent types.
   local opponent_types = { "N/A" }
-  if oppenent_data.teraActive and oppenent_data.teraType ~= nil and oppenent_data.teraType ~= "Stellar" then
+  if opponent_data.teraActive and opponent_data.teraType ~= nil and opponent_data.teraType ~= "Stellar" then
     -- Tera is active.
-    opponent_types = { oppenent_data.teraType }
+    opponent_types = { opponent_data.teraType }
   else
     -- Tera is not active.
-    if oppenent_data ~= nil and oppenent_data.types ~= nil then
-      opponent_types[1] = oppenent_data.types[1]
-      if oppenent_data.types[2] ~= nil then
-        opponent_types[2] = oppenent_data.types[2]
+    if opponent_data ~= nil and opponent_data.types ~= nil then
+      opponent_types[1] = opponent_data.types[1]
+      if opponent_data.types[2] ~= nil then
+        opponent_types[2] = opponent_data.types[2]
       else
         opponent_types[2] = "N/A"
       end
@@ -2175,7 +2233,7 @@ function selectMove(index, isAttacker, isRandom)
     calculateEffectiveness = false
 
     -- Immunities are still calculated.
-    local tempEffectiveness = calculateMoveEffectiveness(moveData, typeData, opponent_types, pokemonData.attackValue, oppenent_data.name)
+    local tempEffectiveness = calculateMoveEffectiveness(moveData, typeData, opponent_types, pokemonData.attackValue, opponent_data.name)
     if pokemonData.attackValue.immune == true then
       pokemonData.attackValue.effectiveness = tempEffectiveness
     end
@@ -2193,7 +2251,7 @@ function selectMove(index, isAttacker, isRandom)
   
   -- Get the typeData and calculate effectiveness.
   if calculateEffectiveness then
-    pokemonData.attackValue.effectiveness = calculateMoveEffectiveness(moveData, typeData, opponent_types, pokemonData.attackValue, oppenent_data.name)
+    pokemonData.attackValue.effectiveness = calculateMoveEffectiveness(moveData, typeData, opponent_types, pokemonData.attackValue, opponent_data.name)
   end
 
   -- If this is Flying Press, we should check which is better out of Fighting/Flying. The default is Fighting.
@@ -2203,7 +2261,7 @@ function selectMove(index, isAttacker, isRandom)
     local tempMoveDataFlying = copyTable(moveData)
     tempMoveDataFlying.type = "Flying"
     local tempTypeDataFlying = Global.call("GetTypeDataByName", tempMoveDataFlying.type)
-    local tempEffectiveness = calculateMoveEffectiveness(tempMoveDataFlying, tempTypeDataFlying, opponent_types, pokemonData.attackValue, oppenent_data.name)
+    local tempEffectiveness = calculateMoveEffectiveness(tempMoveDataFlying, tempTypeDataFlying, opponent_types, pokemonData.attackValue, opponent_data.name)
 
     -- Determine which effectiveness to keep.
     if tempEffectiveness > pokemonData.attackValue.effectiveness then
@@ -2227,7 +2285,7 @@ function selectMove(index, isAttacker, isRandom)
   end
 
   -- Update the counter.
-  updateAttackValue(isAttacker)
+  updateAttackValueCounter(isAttacker)
 
   -- Update the move text tool.
   local moveName = moveData.name
@@ -2505,7 +2563,7 @@ function setMoveData(isAttacker)
   data.attackValue.movePower = movePower
   data.attackValue.effectiveness = effectiveness
 
-  updateAttackValue(isAttacker)
+  updateAttackValueCounter(isAttacker)
 end
 
 
@@ -3326,7 +3384,7 @@ function sendToArenaTitan(params)
 
   -- Update the defender value counter.
   defenderData.attackValue.level = params.titanData.level
-  updateAttackValue(DEFENDER)
+  updateAttackValueCounter(DEFENDER)
 
   -- Add the status buttons.
   showDefStatusButtons(true)
@@ -3445,7 +3503,7 @@ function sendToArenaTitan(params)
 
   if scriptingEnabled then
     defenderData.attackValue.level = defenderPokemon.baseLevel
-    updateAttackValue(DEFENDER)
+    updateAttackValueCounter(DEFENDER)
 
     aiDifficulty = Global.call("GetAIDifficulty")
 
@@ -3528,7 +3586,7 @@ function sendToArenaGym(params)
 
   -- Update the defender value counter.
   defenderData.attackValue.level = pokemonData[1].baseLevel
-  updateAttackValue(DEFENDER)
+  updateAttackValueCounter(DEFENDER)
 
   -- Add the status buttons.
   showDefStatusButtons(true)
@@ -3668,7 +3726,7 @@ function sendToArenaGym(params)
 
   if scriptingEnabled then
     defenderData.attackValue.level = defenderPokemon.baseLevel
-    updateAttackValue(DEFENDER)
+    updateAttackValueCounter(DEFENDER)
 
     aiDifficulty = Global.call("GetAIDifficulty")
 
@@ -3755,14 +3813,14 @@ function sendToArenaTrainer(params)
 
   -- Update the attacker value counter.
   attackerData.attackValue.level = attackerPokemon.baseLevel
-  updateAttackValue(ATTACKER)
+  updateAttackValueCounter(ATTACKER)
 
   -- Add the status buttons.
   showAtkStatusButtons(true)
 
    if scriptingEnabled then
       attackerData.attackValue.level = attackerPokemon.baseLevel
-      updateAttackValue(ATTACKER)
+      updateAttackValueCounter(ATTACKER)
 
       aiDifficulty = Global.call("GetAIDifficulty")
 
@@ -3892,7 +3950,7 @@ function sendToArenaRival(params)
 
   -- Update the attacker value counter.
   attackerData.attackValue.level = attackerPokemon.baseLevel
-  updateAttackValue(ATTACKER)
+  updateAttackValueCounter(ATTACKER)
 
   -- Add the status buttons.
   showAtkStatusButtons(true)
@@ -4530,7 +4588,7 @@ function sendToArena(params)
     else
       defenderData.attackValue.level = pokemonData.baseLevel + pokemonData.diceLevel
     end
-    updateAttackValue(params.isAttacker)
+    updateAttackValueCounter(params.isAttacker)
 
     if scriptingEnabled then
       showConfirmButton(params.isAttacker, "CONFIRM")
@@ -4861,9 +4919,11 @@ function clearPokemonData(isAttacker)
   if isAttacker then
       showAtkButtons(false)
       attackerPokemon = nil
+      attackerData = copyTable(DEFAULT_ARENA_DATA)
   else
       showDefButtons(false)
       defenderPokemon = nil
+      defenderData = copyTable(DEFAULT_ARENA_DATA)
   end
 
   -- The existing battle is over.
@@ -5191,7 +5251,21 @@ function copyTable(original)
 	return copy
 end
 
-function updateAttackValue(isAttacker)
+function adjustAttackValueCounter(isAttacker, adjustment)
+  if not adjustment then return end
+  local counterGUID = nil
+  if isAttacker then
+    counterGUID = atkCounter
+  else
+    counterGUID = defCounter
+  end
+
+  local counter = getObjectFromGUID(counterGUID)
+  local value = counter.Counter.getValue()
+  counter.Counter.setValue(value + adjustment)
+end
+
+function updateAttackValueCounter(isAttacker)
   local atkVal = nil
   local counterGUID = nil
   if isAttacker then
@@ -5214,9 +5288,7 @@ function clearAttackCounter(isAttacker)
 end
 
 function setLevel(params)
-
   local slotData = params.slotData
-
   if params.modifier == 0 then
       return slotData
   end
@@ -5282,7 +5354,7 @@ function setLevel(params)
       defenderData.attackValue.attackRoll = 0
       defenderData.attackValue.item = 0
     end
-    updateAttackValue(params.isAttacker)
+    updateAttackValueCounter(params.isAttacker)
   end
 
   return slotData
@@ -5573,7 +5645,7 @@ function evolvePoke(params)
         arenaData.attackValue = { level = evolvedPokemonData.level + data.diceLevel, movePower = 0, effectiveness = 0, attackRoll = 0, item = 0, immunity = false }
 
         -- Update the arena calculator.
-        updateAttackValue(params.isAttacker)
+        updateAttackValueCounter(params.isAttacker)
 
         -- Check if there is an attach card present.
         local cardMoveData = nil
@@ -7549,7 +7621,7 @@ function checkForNewMoveEffects(isAttacker, move_effects, pokemon_name, effect_r
       local selfData = isAttacker and attackerData or defenderData
       -- Perform the power manipulation.
       selfData.attackValue.movePower = selfData.attackValue.movePower + opponentData.attackValue.movePower
-      updateAttackValue(isAttacker)
+      updateAttackValueCounter(isAttacker)
 
     -- Fire Fang. First roll attempts to trigger. If it triggers, the second-roll causes Disadvantage for odd and Burn for Even.
     elseif move_effect.name == status_ids.fireFang and move_effect.target == status_ids.enemy then
@@ -7819,7 +7891,7 @@ function adjustAttackValue(isAttacker, has_priority, is_new_status, pokemon_name
       selfData.attackValue.movePower = selfData.attackValue.movePower - 1
       if selfData.attackValue.movePower < 0 then selfData.attackValue.movePower = 0 end
       printToAll(pokemon_name .. "'s Attack Strength was reduced by 1 due to Burn (minimum of 0).", {255/255, 68/255, 34/255})
-      updateAttackValue(isAttacker)
+      updateAttackValueCounter(isAttacker)
     end
   end
 end
@@ -7857,7 +7929,7 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       -- Perform the power manipulation.
       self_data.attackValue.movePower = self_data.attackValue.movePower - 1
       if self_data.attackValue.movePower < 0 then self_data.attackValue.movePower = 0 end
-      updateAttackValue(field_index == 1)   -- field_index will equal 1 for the Attacker. 
+      updateAttackValueCounter(field_index == 1)   -- field_index will equal 1 for the Attacker. 
       printToAll(pokemon_name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.spikes .. " (minimum of 0).", {221/255, 187/255, 85/255})
     -- Check for Electric Terrain. This applies to both Pokemon if it is present.
     elseif field_effects[field_index].name == field_effect_ids.electricterrain then
@@ -7865,14 +7937,14 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Electric" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.electricterrain .. ".", {255/255, 204/255, 51/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Electric" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.electricterrain .. ".", {255/255, 204/255, 51/255})
       end
     -- Check for Grass Terrain. This applies to both Pokemon if it is present.
@@ -7881,14 +7953,14 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Grass" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.grassyterrain .. ".", {119/255, 204/255, 85/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Grass" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.grassyterrain .. ".", {119/255, 204/255, 85/255})
       end
     -- Check for Hail. This applies to both Pokemon if it is present.
@@ -7897,14 +7969,14 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].types[1] ~= "Ice" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[1].types[2] ~= "Ice")) then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.hail .. ".", {102/255, 204/255, 255/255})
       end
       -- Defender.
       if pokemon_params[2].types[1] ~= "Ice" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[2].types[2] ~= "Ice")) then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.hail .. ".", {102/255, 204/255, 255/255})
       end
     -- Check for Psychic Terrain. This applies to both Pokemon if it is present.
@@ -7913,14 +7985,14 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Psychic" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.psychicterrain .. ".", {255/255, 85/255, 153/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Psychic" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.psychicterrain .. ".", {255/255, 85/255, 153/255})
       end
     -- Check for Rain. This applies to both Pokemon if it is present.
@@ -7929,24 +8001,24 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Water" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
       elseif pokemon_params[1].move_type == "Fire" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Water" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
       elseif pokemon_params[2].move_type == "Fire" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
       end
     -- Check for Harsh Sunlight. This applies to both Pokemon if it is present.
@@ -7955,24 +8027,24 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Fire" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
       elseif pokemon_params[1].move_type == "Water" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Fire" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
       elseif pokemon_params[2].move_type == "Water" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
       end
     -- Check for Sandstorm. This applies to both Pokemon if it is present.
@@ -7981,14 +8053,14 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].types[1] ~= "Ground" and pokemon_params[1].types[1] ~= "Rock" and pokemon_params[1].types[1] ~= "Steel" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[1].types[2] ~= "Ground" and pokemon_params[1].types[2] ~= "Rock" and pokemon_params[1].types[2] ~= "Steel")) then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.sandstorm .. ".", {187/255, 170/255, 102/255})
       end
       -- Defender. Sorry :/
       if pokemon_params[2].types[1] ~= "Ground" and pokemon_params[2].types[1] ~= "Rock" and pokemon_params[2].types[1] ~= "Steel" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[2].types[2] ~= "Ground" and pokemon_params[2].types[2] ~= "Rock" and pokemon_params[2].types[2] ~= "Steel")) then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.sandstorm .. ".", {187/255, 170/255, 102/255})
       end
     -- Check for Stealth Rock. This applies to only the Pokemon on this side.
@@ -8015,7 +8087,7 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
         if total_reduction > 2 then total_reduction = 2 end
         self_data.attackValue.movePower = self_data.attackValue.movePower - total_reduction
         if self_data.attackValue.movePower < 0 then self_data.attackValue.movePower = 0 end
-        updateAttackValue(field_index == 1)   -- field_index will equal 1 for the Attacker. 
+        updateAttackValueCounter(field_index == 1)   -- field_index will equal 1 for the Attacker. 
         printToAll(pokemon_name .. "'s Attack Strength was reduced by " .. tostring(total_reduction) .. " due to " .. field_effect_ids.stealthrock .. " (minimum of 0).", {187/255, 170/255, 102/255})
       else
         printToAll(pokemon_name .. " completely resisted " .. field_effect_ids.stealthrock .. ".")
@@ -8026,24 +8098,24 @@ function resolveExistingFieldEffects(attacker_params, defender_params)
       if pokemon_params[1].move_type == "Fairy" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
       elseif pokemon_params[1].move_type == "Dragon" then
         -- Perform the power manipulation.
         attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValue(ATTACKER)
+        updateAttackValueCounter(ATTACKER)
         printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
       end
       -- Defender.
       if pokemon_params[2].move_type == "Fairy" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
       elseif pokemon_params[2].move_type == "Dragon" then
         -- Perform the power manipulation.
         defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValue(DEFENDER)
+        updateAttackValueCounter(DEFENDER)
         printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
       end
     end
@@ -8215,7 +8287,7 @@ function simulate_dice_rolls_logs(isAttacker, dice_type, pokemon_name)
   printToAll(calcString)
 
   -- Update the counter.
-  updateAttackValue(isAttacker)
+  updateAttackValueCounter(isAttacker)
   printToAll("")
 end
 
@@ -8238,7 +8310,7 @@ function resolve_confusion(isAttacker, self_name, opponent_name)
       opponent_data.attackValue.attackRoll = opponent_data.attackValue.attackRoll + self_data.attackValue.attackRoll
 
       -- Update the counter.
-      updateAttackValue(not isAttacker)
+      updateAttackValueCounter(not isAttacker)
     end
   end
 end
@@ -8389,7 +8461,7 @@ function simulateRound(obj, color, alt)
     -- Update the status counter.
     defenderData.attackValue.movePower = 0
     defenderData.attackValue.effectiveness = 0
-    updateAttackValue(DEFENDER)
+    updateAttackValueCounter(DEFENDER)
 
     -- Update the move.
     local text = getObjectFromGUID(defText)
@@ -8444,7 +8516,7 @@ function simulateRound(obj, color, alt)
     -- Update the status counter.
     attackerData.attackValue.movePower = 0
     attackerData.attackValue.effectiveness = 0
-    updateAttackValue(ATTACKER)
+    updateAttackValueCounter(ATTACKER)
 
     -- Update the move.
     local text = getObjectFromGUID(atkText)
@@ -8502,7 +8574,6 @@ end
 function getBooster(isAttacker, boosterName)
   -- TODO: With the expansion of boosters, boosterName is currently not considered.
   --       Previously, we iterated through the boosters until we found one with its name.
-  --       Now we can iterate through the booster options until we find it.
 
   -- Get a booster from a random position in the booster deck.
   local card_index = nil
