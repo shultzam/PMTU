@@ -1,1 +1,3 @@
 temp_*
+ignore/*
+pdf_extraction/output/*
