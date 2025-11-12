@@ -6,19 +6,19 @@ extract_pokedex_from_pdf.py
 Scan one or two Pokedex PDFs page-by-page, detect entries like "#001 Bulbasaur",
 normalize names, and emit a Lua table in the form:
 
-  local shiny_guid_table = {
+  local pokedex_table = {
     ["Bulbasaur"] = {1, 12},
     ["Mega Charizard Y"] = {2, 3},
     ...
   }
 
 Usage examples:
-  python extract_pokedex_from_pdf.py "Pokedex Gen I.pdf" "pokedex_1-4.pdf" -o "./output/shiny_table.lua"
-  python extract_pokedex_from_pdf.py "pokedex_1-4.pdf" --page-offset1 0 -o "./output/shiny_table.lua"
+  python extract_pokedex_from_pdf.py "Pokedex Gen I.pdf" "pokedex_1-4.pdf" -o "./output/pokedex_table.lua"
+  python extract_pokedex_from_pdf.py "pokedex_1-4.pdf" --page-offset1 0 -o "./output/pokedex_table.lua"
 
 Options:
-  -o, --output FILE       Output Lua file (default: shiny_table.lua)
-  --var NAME              Lua variable name (default: shiny_guid_table)
+  -o, --output FILE       Output Lua file (default: pokedex_table.lua)
+  --var NAME              Lua variable name (default: pokedex_table)
   --no-local              Emit 'NAME = { ... }' instead of 'local NAME = { ... }'
   --prefer {first,second} If a name appears in both PDFs, which wins (default: first)
   --page-offset1 N        Page offset added to PDF #1 pages (default: 0)
@@ -100,7 +100,15 @@ KNOWN_FIXES: Dict[str, str] = {
     "(cid:31)roh": "Throh",
     "Thro": "Throh",
     "Farfetch'd": "Farfetch\'d",
-    "Flabébé": "Flabebe"
+    "Flabébé": "Flabebe",
+    "Zygarde-10": "10% Zygarde",
+    "Zygarde-50": "50% Zygarde",
+    "Zygarde-Complete": "Complete Zygarde",
+    "Shiny {Mega}Gyarados": "Shiny Mega Gyarados",
+    "Enamorus": "Incarnate Enamorus",
+    "Enamorus-erian": "Therian Enamorus",
+    "Palan-Hero": "Hero Palafin",
+    "Palan-Zero": "Zero Palafin",
 }
 
 # ----------------- Normalization helpers -----------------
@@ -162,7 +170,7 @@ def map_variant_prefix(s: str) -> str:
         "paldean": "Paldean",
         "armored": "Armored",
         "totem": "Totem",
-        "ash-greninja": "Ash-Greninja",
+        "ash-greninja": "Ash-Greninja"
     }
     if norm in prefix_map:
         return (prefix_map[norm] + (" " + rest if rest else "")).strip()
@@ -180,6 +188,29 @@ def normalize_name(raw: str) -> str:
     s = map_variant_prefix(s)
     s = normalize_gender_suffix(s)
     s = final_known_fixes(s)
+
+    # --- Attribute flip logic.
+    # If name has the form "X-Attribute" where Attribute looks like a region or form,
+    # flip it to "Attribute X" (e.g., "Gastrodon-East" -> "East Gastrodon")
+    # but skip cases where the dash is part of a known Pokémon name (e.g. Ho-Oh, Porygon-Z)
+    skip_dash_names = {"Ho-Oh", "Porygon-Z", "Type-Null"}
+    if s not in skip_dash_names and "-" in s:
+        parts = s.split("-")
+        if len(parts) == 2:
+            first, second = parts[0].strip(), parts[1].strip()
+            # Only flip if the suffix is one of the common attributes
+            region_like = {
+                "Amped", "Aqua", "Autumn", "Baile", "Blade", "Blue", "Combat",
+                "Core", "Curly", "Defense", "Droopy", "Drowzee", "Dusk",
+                "Fan", "Frost", "Full-Belly", "Hangry", "Heat", "Ice", "Low-Key",
+                "Mane", "Meteor", "Midday", "Midnight", "Mow", "Noice", "Origin",
+                "Pau", "Pirouette", "Plant", "Pom-Pom", "Red", "Rainy", "Resolute",
+                "School", "Sensu", "Shield", "Solo", "Sandy", "Snowy", "Stretchy",
+                "Summer", "Sunny", "Trash", "Unbound", "Wash", "West", "Winter", "Zen",
+                "Aqua", "Blaze",  # Paldean Tauros forms
+            }
+            if second.capitalize() in region_like:
+                s = f"{second.capitalize()} {first}"
     return s
 
 # ----------------- Detection -----------------
@@ -221,7 +252,7 @@ def render_lua_local_table(var: str, mapping: Dict[str, Tuple[int, int]], make_l
     lines = [header]
     for name in sorted(mapping.keys(), key=lambda x: x.lower()):
         book, page = mapping[name]
-        lines.append(f'  ["{lua_escape(name)}"] = {{{book}, {page}}},')
+        lines.append(f'  ["{lua_escape(name)}"] = {{book={book}, page={page}}},')
     lines.append("}")
     return "\n".join(lines)
 
@@ -230,8 +261,8 @@ def main():
     ap = argparse.ArgumentParser(description="Extract names/pages from 1 or 2 Pokedex PDFs and emit a Lua table.")
     ap.add_argument("pdf1", help="First PDF (book 1)")
     ap.add_argument("pdf2", nargs="?", help="Second PDF (book 2, optional)")
-    ap.add_argument("-o", "--output", default="shiny_table.lua", help="Output Lua file path")
-    ap.add_argument("--var", default="shiny_guid_table", help="Lua variable name")
+    ap.add_argument("-o", "--output", default="pokedex_table.lua", help="Output Lua file path")
+    ap.add_argument("--var", default="pokedex_table", help="Lua variable name")
     ap.add_argument("--no-local", action="store_true", help="Emit 'NAME = { ... }' instead of 'local NAME = { ... }'")
     ap.add_argument("--prefer", choices=["first", "second"], default="first",
                     help="If a name appears in both PDFs, which one wins")
