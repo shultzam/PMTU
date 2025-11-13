@@ -2323,8 +2323,12 @@ function selectMove(index, isAttacker, isRandom)
             -- Some have a cool signature attack animation. We have to deal with all of that cool/lame stuff.
             local animations_table = {}
             for animation_index=1, triggerListLength do
-              if string.find(triggerList[animation_index].name, "Attack") then
-                table.insert(animations_table, triggerList[animation_index].name)
+              local move_name = triggerList[animation_index].name
+              if string.find(move_name, "Attack") then
+                table.insert(animations_table, move_name)
+              elseif move_name == "Spiky Shield" then
+                -- Mega Chesnaught has a cool signature animation. Sue me.
+                table.insert(animations_table, move_name)
               end
             end
             
