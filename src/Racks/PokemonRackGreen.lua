@@ -23,8 +23,6 @@ local rackPosition = {x=-65,y=0.14,z=-21.50}
 --------------------------------------------------------------------------------
 local battleManager = "de7152"
 
-local isAttacking = false
-local isDefending = false
 local autoCamera = false
 
 -- Positions
@@ -59,10 +57,41 @@ HEALTH_INDICATORS = {
 
 HEALTH_INDICATOR_GUIDS = { }
 
+--------------------------------------------------------------------------------
+-- Pokedex Data
+--------------------------------------------------------------------------------
+
+POKEDEX_HANDLER_GUID = "ea518e"
+local pokedexCaptures = {}
+local pokedexRecentRequests = {}
+local pokedexSteamId = nil
+local POKEDEX_DUP_WINDOW = 3
+local function resetPokedexCaches()
+  pokedexCaptures = {}
+  pokedexRecentRequests = {}
+end
+
+local function syncPokedexSteamId()
+  local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+  if not handler then
+    return
+  end
+  local identity = handler.call("getSteamIdentityForColor", { color = playerColour })
+  local steam_id = identity and identity.steam_id
+
+  -- If a different player sits here, wipe stale saved captures for this rack.
+  if steam_id and steam_id ~= pokedexSteamId then
+    resetPokedexCaches()
+    pokedexSteamId = steam_id
+  end
+end
+
 function onSave()
     -- Create the save table.
   local save_table = {
-    health_indicators_guids=HEALTH_INDICATOR_GUIDS
+    health_indicators_guids=HEALTH_INDICATOR_GUIDS,
+    pokedex_captures=pokedexCaptures,
+    pokedex_steam_id=pokedexSteamId,
   }
   return JSON.encode(save_table)
 end
@@ -100,6 +129,12 @@ function onLoad(saved_data)
   if save_table then
     HEALTH_INDICATOR_GUIDS = save_table.health_indicators_guids
     if not HEALTH_INDICATOR_GUIDS then HEALTH_INDICATOR_GUIDS = {} end
+    if save_table.pokedex_captures and type(save_table.pokedex_captures) == "table" then
+      pokedexCaptures = save_table.pokedex_captures
+    end
+    if save_table.pokedex_steam_id then
+      pokedexSteamId = save_table.pokedex_steam_id
+    end
   end
 end
 
@@ -143,6 +178,15 @@ function rackRefreshPokemon()
 
     local battleManager = getObjectFromGUID(battleManager)
     rackData = battleManager.call("refreshPokemon", params)
+
+    -- Try to capture each Pokemon.
+    for _, slot in ipairs(rackData) do
+        if slot and slot.pokemonGUID and slot.name then
+            local shinyState = Global.call("get_token_shiny_status", slot.pokemonGUID) or false
+            local isShiny = shinyState == true
+            onCaptureResolved(slot.name, isShiny)
+        end
+    end
 end
 
 
@@ -584,4 +628,85 @@ function handleStatsRequest(obj, color, alt)
     else
         print("Failed to find Record Keeper")
     end
+end
+
+---------------------------------
+-- Pokedex.
+---------------------------------
+
+local function shouldSendPokedexCapture(pokemon_name, isShiny)
+    if not pokemon_name or pokemon_name == "" then
+        return false
+    end
+
+    -- If a new player is at this rack, clear stale persisted captures.
+    syncPokedexSteamId()
+
+    local now = os.time()
+    local recentTs = pokedexRecentRequests[pokemon_name]
+    if recentTs and (now - recentTs) < POKEDEX_DUP_WINDOW then
+        return false
+    end
+
+    local recorded = pokedexCaptures[pokemon_name]
+    if recorded then
+        if recorded.shiny or (not isShiny and recorded.normal) then
+            return false
+        end
+    end
+    return true
+end
+
+local function markPokedexRequest(pokemon_name)
+    pokedexRecentRequests[pokemon_name] = os.time()
+end
+
+function onPokedexCaptureRecorded(params)
+    if not params or not params.pokemon_name then
+        return
+    end
+    local isShiny = params.shiny == true
+    local entry = pokedexCaptures[params.pokemon_name] or { normal = false, shiny = false }
+    if isShiny then
+        entry.shiny = true
+        entry.normal = true
+    else
+        entry.normal = true
+    end
+    pokedexCaptures[params.pokemon_name] = entry
+end
+
+-- Called when a capture is resolved in-game.
+function onCaptureResolved(pokemon_name, isShiny)
+    if not shouldSendPokedexCapture(pokemon_name, isShiny) then
+        return
+    end
+
+    markPokedexRequest(pokemon_name)
+
+    -- Get a handle on the pokedex handler.
+    local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+    if not handler then
+        return
+    end
+
+    -- Record the capture.
+    handler.call("recordCapture", {
+        color = playerColour,
+        pokemon_name = pokemon_name,
+        shiny = isShiny == true,
+        rack_guid = self.getGUID(),
+    })
+end
+
+-- Requests the dex for the given player color.
+function requestMyDex(player_color)
+    -- Get a handle on the pokedex handler.
+    local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+    if not handler then
+        return
+    end
+    
+    -- Get a handle on the pokedex handler.
+    handler.call("fetchDex", { color = player_color })
 end

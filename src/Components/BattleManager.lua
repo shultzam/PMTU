@@ -959,7 +959,7 @@ function flipRivalPokemon()
     -- Get a handle on the object.
     local health_indicator = getObjectFromGUID(attackerData.health_indicator_guid)
     if health_indicator then
-      health_indicator.call("setValue", attackerPokemon.pokemon2.baseLevel)
+      health_indicator.call("setValue", attackerPokemon.baseLevel)
     end
   end
 

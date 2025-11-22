@@ -38,7 +38,7 @@ CARDS = {
   tera_orb = { name = "Tera Orb", cost = 18, desc = "- Tera Orb: Draw 3 cards from the Tera-Type deck. Add 1 to your hand and then place the rest on the bottom of the deck."},
   running_shoes = { name = "Running Shoes", cost = 4, desc = "- Running Shoes: Play this card to add 1 or 2 to your movement roll." },
   repel = { name = "Repel", cost = 4, desc = "- Repel: When revealing a wild Pokémon, you may play this card to draw 2 more tokens of the same color and replace the revealed Pokémon with either." },
-  black_flute = { name = "Black Flute", cost = 8, "- Black Flute: You may play this card at the beginning of a wild battle to increase the level of the wild Pokémon to match the level of your Pokémon in play. Their level returns to normal at the end of the battle." }
+  black_flute = { name = "Black Flute", cost = 8, desc = "- Black Flute: You may play this card at the beginning of a wild battle to increase the level of the wild Pokémon to match the level of your Pokémon in play. Their level returns to normal at the end of the battle." }
 }
 
 -- Button constants.

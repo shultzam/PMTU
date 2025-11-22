@@ -1,4 +1,4 @@
---[[ Lua code. See documentation: https://api.tabletopsimulator.com/ --]]
+﻿--[[ Lua code. See documentation: https://api.tabletopsimulator.com/ --]]
 
 -- Commonly used GUIDs.
 BATTLE_MANAGER_GUID = "de7152"
@@ -12,6 +12,9 @@ TYPE_CHART_GUID = "a3dfb6"
 -- Pokedex Info.
 GEN_1_4_POKEDEX_GUIDS = { "9adc0d", "372ed8" }
 GEN_5_9_POKEDEX_GUIDS = { "48c255", "dea94b" }
+
+-- Global Pokedex Handler GUID.
+POKEDEX_HANDLER_GUID = "ea518e"
 
 -- This basically says that if your pokedex number is less than or equal to this number here is your book and page number.
 POKEDEX_PAGE_REFERENCES = {
@@ -183,6 +186,7 @@ hasEnoughPokemon = true
 customAndTooFewLeaders = false
 randomStarters = false
 filterTMs = true
+useGlobalPokedex = false
 battleScripting = false
 aiDifficulty = 0
 
@@ -358,7 +362,6 @@ RACK = 2
 HR_dual_type_effectiveness = false
 HR_immunities = false
 HR_gym_leader_boosters = false
-HR_hard_gym_leaders = false             -- Not yet implemented.
 HR_hp_rule_2 = false
 
 -- Helpers.
@@ -1531,10 +1534,10 @@ gen5PokemonData =
   -- Mega evolutions.
   { name="Mega Audino",     level=5,    types={ "Fairy", "Normal" },  moves={ "Disarming Voice", "Secret Power" }, guids={ "0c7909" },           evoData={ { cost=0, ball=BLUE, gen=5, cycle=true, guids={ "b81637" } } }, model_GUID="793f23", spawn_effect="Mega Evolve" },
   { name="GMax Garbodor",   level=5,    types={ "Poison" },           moves={ "Malador", "Strike" },               guids={ "43b26e", "a13dc7" }, evoData={ { cost=0, ball=YELLOW, gen=5, cycle=true, guids={ "427e7e", "cf4c7d" } } }, model_GUID="3a0074", offset={x=0, y=1.25, z=0}, custom_scale=0.45 },
-  { name="Mega Emboar",     level=6,    types={ "Fire", "Fighting" }, moves={ "Head Smash", "Heat Crash" },        guids={ "6a1eb3", "ec42ce" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "e51210", "de874b", "5d555c" } } } }, -- TODO: Needs model.
-  { name="Mega Excadrill",  level=5,    types={ "Ground", "Steel" },  moves={ "Iron Head", "Drill Run" },          guids={ "714ed6", "8e7267" }, evoData={ { cost=0, ball=BLUE, gen=5, cycle=true, guids={ "8ce447", "777dd0" } } } }, -- TODO: Needs model.
-  { name="Mega Scolipede",  level=5,    types={ "Bug", "Poison" },    moves={ "Megahorn", "Earthquake" },          guids={ "74ef12", "fb9906" }, evoData={ { cost=0, ball=YELLOW, gen=5, cycle=true, guids={ "c997bd", "914aa1", "ae213b" } } } }, -- TODO: Needs model.
-  { name="Mega Scrafty",    level=6,    types={ "Dark", "Fighting" }, moves={ "Dynamic Punch", "Head Smash" },     guids={ "cc4963", "563f0f" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "d2d70d", "65b5a8" } } } }, -- TODO: Needs model.
+  { name="Mega Emboar",     level=6,    types={ "Fire", "Fighting" }, moves={ "Head Smash", "Heat Crash" },        guids={ "6a1eb3", "ec42ce" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "e51210", "de874b", "5d555c" } } }, model_GUID="5bde73", spawn_effect="Mega Evolve" },
+  { name="Mega Excadrill",  level=5,    types={ "Ground", "Steel" },  moves={ "Iron Head", "Drill Run" },          guids={ "714ed6", "8e7267" }, evoData={ { cost=0, ball=BLUE, gen=5, cycle=true, guids={ "8ce447", "777dd0" } } }, model_GUID="dd15d9", spawn_effect="Mega Evolve" },
+  { name="Mega Scolipede",  level=5,    types={ "Bug", "Poison" },    moves={ "Megahorn", "Earthquake" },          guids={ "74ef12", "fb9906" }, evoData={ { cost=0, ball=YELLOW, gen=5, cycle=true, guids={ "c997bd", "914aa1", "ae213b" } } }, model_GUID="d774e7", spawn_effect="Mega Evolve" },
+  { name="Mega Scrafty",    level=6,    types={ "Dark", "Fighting" }, moves={ "Dynamic Punch", "Head Smash" },     guids={ "cc4963", "563f0f" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "d2d70d", "65b5a8" } } }, model_GUID="ac7e97", spawn_effect="Mega Evolve" },
   { name="Mega Eelektross", level=7,    types={ "Electric" },         moves={ "Thunderbolt", "Waterfall" },        guids={ "79455f", "3dc1f8" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "74b8ad", "03bbca", "1e9b7b" } } }, model_GUID="2c7c9d", spawn_effect="Mega Evolve" },
   { name="Mega Chandelure", level=7,    types={ "Ghost", "Fire" },    moves={ "Flame Wheel", "Solar Beam" },       guids={ "d39ce5", "82b77e" }, evoData={ { cost=0, ball=RED, gen=5, cycle=true, guids={ "5a029a", "00885b", "1d0a91" } } }, model_GUID="d56a7d", spawn_effect="Mega Evolve" },
 }
@@ -1635,12 +1638,12 @@ gen6PokemonData =
   { name="Mega Delphox",    level=6, types={ "Fire", "Psychic" },     moves={ "Dazzling Gleam", "Fire Blast" }, guids={ "17e3fb", "28d9bc" }, evoData={ { cost=0, ball=RED, gen=6, cycle=true, guids={ "ab189f", "9d0714", "e805db" } } }, model_GUID="17b9af", spawn_effect="Mega Evolve" },
   { name="Mega Chesnaught", level=6, types={ "Grass", "Fighting" },   moves={ "Stone Edge", "Brick Break" }, guids={ "ae6292", "a9d3b9" },    evoData={ { cost=0, ball=RED, gen=6, cycle=true, guids={ "9377c5", "4b2bfb", "b1fb69" } } }, model_GUID="dc8855", offset={x=0, y=0.15, z=0}, spawn_effect="Mega Evolve" },
   { name="Mega Diancie",    level=8, types={ "Rock", "Fairy" },       moves={ "Moonblast", "Stone Edge" },   guids={ "9addeb" },              evoData={ { cost=0, ball=LEGENDARY, gen=6, cycle=true, guids={ "dfd970" } } }, model_GUID="33befa", spawn_effect="Special Attack" },
-  { name="Mega Hawlucha",   level=4, types={ "Fighting", "Flying" },  moves={ "Flying Press", "Lunge" },     guids={ "6b1739" },              evoData={ { cost=0, ball=GREEN, gen=6, cycle=true, guids={ "ecc5ed" } } } }, -- TODO: Needs model.
-  { name="Mega Dragalge",   level=7, types={ "Poison", "Dragon" },    moves={ "Poison Jab", "Hydro Pump" },  guids={ "2ee052", "9f6233" },    evoData={ { cost=0, ball=RED, gen=6, cycle=true, guids={ "3a948e", "661d8b" } } } }, -- TODO: Needs model.
+  { name="Mega Hawlucha",   level=4, types={ "Fighting", "Flying" },  moves={ "Flying Press", "Lunge" },     guids={ "6b1739" },              evoData={ { cost=0, ball=GREEN, gen=6, cycle=true, guids={ "ecc5ed" } } }, model_GUID="f5de1c", offset={x=0, y=0.10, z=0}, spawn_effect="Mega Evolve" },
+  { name="Mega Dragalge",   level=7, types={ "Poison", "Dragon" },    moves={ "Poison Jab", "Hydro Pump" },  guids={ "2ee052", "9f6233" },    evoData={ { cost=0, ball=RED, gen=6, cycle=true, guids={ "3a948e", "661d8b" } } }, model_GUID="a1f16d", spawn_effect="Mega Evolve" },
   { name="Mega Barbaracle", level=6, types={ "Rock", "Fighting" },    moves={ "Stone Edge", "Brick Break" }, guids={ "5fb02a", "890e33" },    evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "e9dd78", "c6fcdc" } } } }, -- TODO: Needs model.
-  { name="Mega Malamar",    level=5, types={ "Dark", "Psychic" },     moves={ "Night Slash", "Reversal" },   guids={ "29ce32", "67bf1a" },    evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "8bd2d5", "0dca90" } } } }, -- TODO: Needs model.
-  { name="Mega Pyroar",     level=5, types={ "Fire", "Normal" },      moves={ "Flamethrower", "Earth Power" }, guids={ "2e77a3", "b7a874" },  evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "e7c9cc", "dbc1b3" } } } }, -- For F. -- TODO: Needs model.
-  { name="Mega Pyroar",     level=5, types={ "Fire", "Normal" },      moves={ "Flamethrower", "Earth Power" }, guids={ "ef5356", "d0bb6c" },  evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "eefb5c", "318002" } } } }, -- For M. -- TODO: Needs model.
+  { name="Mega Malamar",    level=5, types={ "Dark", "Psychic" },     moves={ "Night Slash", "Reversal" },   guids={ "29ce32", "67bf1a" },    evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "8bd2d5", "0dca90" } } }, model_GUID="db7e4e", spawn_effect="Mega Evolve" },
+  { name="Mega Pyroar",     level=5, types={ "Fire", "Normal" },      moves={ "Flamethrower", "Earth Power" }, guids={ "2e77a3", "b7a874" },  evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "e7c9cc", "dbc1b3" } } }, model_GUID="bb0985", spawn_effect="Mega Evolve" },
+  { name="Mega Pyroar",     level=5, types={ "Fire", "Normal" },      moves={ "Flamethrower", "Earth Power" }, guids={ "ef5356", "d0bb6c" },  evoData={ { cost=0, ball=YELLOW, gen=6, cycle=true, guids={ "eefb5c", "318002" } } }, model_GUID="bb0985", spawn_effect="Mega Evolve" },
   { name="Mega Eternal Flower Floette", level=5, types={ "Fairy" },   moves={ "Light of Ruin", "Magical Leaf" }, guids={ "0f4e8b" },          evoData={ { cost=0, ball=BLLUE,  gen=6, cycle=true, guids={ "5419e6" } } }, model_GUID="54830e", spawn_effect="Mega Evolve" },
   { name="Mega Zygarde",    level=8, types={ "Dragon", "Ground" },    moves={ "Focus Blast", "Nihil Light" }, guids={ "6af4b3" },             evoData={ { cost=0, ball=LEGENDARY, gen=6, cycle=true, guids={ "ea5e61" } } }, model_GUID="ea0b4f", offset={x=0, y=0.15, z=0}, spawn_effect="Mega Evolve" },
 }
@@ -2217,7 +2220,6 @@ moveData =
     {name="Spacial Rend",   power=2,      type="Dragon",    dice=8, STAB=true   },
     {name="Twister",        power=1,      type="Dragon",    dice=6, STAB=true,  effects={{name="Disadvantage", target="Enemy", chance=6}} },
     {name="Breaking Swipe", power=2,      type="Dragon",    dice=6, STAB=true,  effects={{name="Disadvantage", target="Enemy"}} },
-    {name="Dragon Ascent",  power=3,      type="Dragon",    dice=6, STAB=true,  effects={{name="StatDown", target="Self"}} },
     {name="Wyrmwind",       power=3,      type="Dragon",    dice=6, STAB=true,  effects={{name="Custom"}}},
     {name="Eternabeam",     power=4,      type="Dragon",    dice=6, STAB=true,  effects={{name="Recharge", target="Self"}} },
     {name="Devastating Drake",power=4,    type="Dragon",    dice=6, STAB=false, effects={{name="Recharge", target="Self"}} },
@@ -2440,6 +2442,7 @@ moveData =
     {name="Roost",          power=0,      type="Flying",  dice=6, STAB=false,   effects={{name="LifeRecovery", target="Self"}} },
     {name="Pluck",          power=2,      type="Flying",  dice=6, STAB=true,    effects={{name="KnockOff", target="Enemy"}} },
     {name="Acrobatics",     power=2,      type="Flying",  dice=6, STAB=true,    effects={{name="Custom"}} },
+    {name="Dragon Ascent",  power=3,      type="Flying",  dice=6, STAB=true,    effects={{name="StatDown", target="Self"}} },
 
     -- Ghost
     {name="Astral Barrage", power=3,      type="Ghost",   dice=6, STAB=true},
@@ -6223,6 +6226,7 @@ local shiny_guid_table = {
   ["Tepig"] = "f18fb3",
   ["Pignite"] = "8a552a",
   ["Emboar"] = "0721c3",
+  ["Mega Emboar"] = "a95998",
   ["Oshawott"] = "e765dc",
   ["Dewott"] = "01a428",
   ["Samurott"] = "a13d0c",
@@ -6253,6 +6257,7 @@ local shiny_guid_table = {
   ["Swoobat"] = "5b7ab1",
   ["Drilbur"] = "de9071",
   ["Excadrill"] = "cd2f2f",
+  ["Mega Excadrill"] = "bd6f49",
   ["Audino"] = "18e966",
   ["Timburr"] = "f2e6d3",
   ["Gurdurr"] = "532279",
@@ -6268,6 +6273,7 @@ local shiny_guid_table = {
   ["Venipede"] = "1fbe1a",
   ["Whirlipede"] = "ac2f59",
   ["Scolipede"] = "289cd9",
+  ["Mega Scolipede"] = "526eee",
   ["Cottonee"] = "ecff4b",
   ["Whimsicott"] = "e47fbb",
   ["Petilil"] = "731cfb", 
@@ -6285,6 +6291,7 @@ local shiny_guid_table = {
   ["Crustle"] = "3d24f6",
   ["Scraggy"] = "1d9df7",
   ["Scrafty"] = "f98b52",
+  ["Mega Scrafty"] = "99339e",
   ["Sigilyph"] = "7002ea",
   ["Yamask"] = "61a8b4",
   ["Cofagrigus"] = "2f74d9",
@@ -6415,6 +6422,7 @@ local shiny_guid_table = {
   ["Litleo"] = "935af6",
   ["Pyroar (M)"] = "936b85",
   ["Pyroar (F)"] = "6c1e27",
+  ["Mega Pyroar"] = "36ee40",
   ["Flabebe"] = "40851b",
   ["Floette"] = "dc27b2",
   ["Eternal Flower Floette"] = nil, -- TODO: needs model
@@ -6438,10 +6446,12 @@ local shiny_guid_table = {
   ["Slurpuff"] = "7ca740",
   ["Inkay"] = "3badca",
   ["Malamar"] = "ee8551",
+  ["Mega Malamar"] = "f245ac",
   ["Binacle"] = "16fa82",
   ["Barbaracle"] = "366f71",
   ["Skrelp"] = "c4b786",
   ["Dragalge"] = "57a8b2",
+  ["Mega Dragalge"] = "8dcb24",
   ["Clauncher"] = "b7e82c",
   ["Clawitzer"] = "e13d13",
   ["Helioptile"] = "60206b",
@@ -6452,6 +6462,7 @@ local shiny_guid_table = {
   ["Aurorus"] = "a2fbbe",
   ["Sylveon"] = "c75fe3",
   ["Hawlucha"] = "df80b3",
+  ["Mega Hawlucha"] = "750452",
   ["Dedenne"] = "0e5232",
   ["Carbink"] = "47d955",
   ["Goomy"] = "ae5634",
@@ -8611,43 +8622,19 @@ function RandomGymGuidOfTier(params)
     return { leader_gen=params.gen, guid=pool[math.random(1, #pool)] } 
   end
 
-  -----------------
-
-  -- local new_guid_list = FilterGymDataOnTier(params.gen, params.tier, true)
-  -- if #new_guid_list > 0 then
-  --   local final_guid_list = {}
-  --   if params.retrievedList ~= nil and #params.retrievedList > 0 then
-  --     for gymIndex=1, #new_guid_list do
-  --       local unique = true
-  --       for retrievedLeaderIndex=1, #params.retrievedList do
-  --         if new_guid_list[gymIndex] == params.retrievedList[retrievedLeaderIndex] then
-  --           unique = false
-  --         end
-  --       end
-
-  --       if unique then table.insert(final_guid_list, new_guid_list[gymIndex]) end
-  --     end
-  --   else
-  --     return { leader_gen = params.gen, guid = new_guid_list[math.random(#new_guid_list)] }
-  --   end
-  --   if #final_guid_list > 0 then
-  --     return { leader_gen = params.gen , guid = final_guid_list[math.random(#final_guid_list)] }
-  --   end
-
-    -- Failed to find the Gym Leader so find a random leader. This occurs when we try 
-    -- to grab more customs than are available or when we have more gyms than 8 (Alola).
-    local tries_remaining = 10
-    while tries_remaining > 0 do
-      local gen = math.random(1, 10)
-      new_guid_list = FilterGymDataOnTier(gen, params.tier, true)
-      if #new_guid_list > 0 then
-        return { leader_gen = gen, guid = new_guid_list[math.random(#new_guid_list)] }
-      end
-
-      -- Decrement tries.
-      tries_remaining = tries_remaining - 1
+  -- Failed to find the Gym Leader so find a random leader. This occurs when we try 
+  -- to grab more customs than are available or when we have more gyms than 8 (Alola).
+  local tries_remaining = 10
+  while tries_remaining > 0 do
+    local gen = math.random(1, 10)
+    new_guid_list = FilterGymDataOnTier(gen, params.tier, true)
+    if #new_guid_list > 0 then
+      return { leader_gen = gen, guid = new_guid_list[math.random(#new_guid_list)] }
     end
-  -- end
+
+    -- Decrement tries.
+    tries_remaining = tries_remaining - 1
+  end
 
   local gymStringTable =
   {
@@ -8666,7 +8653,7 @@ function RandomGymGuidOfTier(params)
 
   local gymString = gymStringTable[params.tier]
   printToAll("Failed to find gym leader options for gen " .. tostring(params.gen) .. ", tier " .. tostring(gymString))
-  return 0
+  return nil
 end
 
 -- Gets the count of custom leaders available for a tier.
@@ -8755,7 +8742,6 @@ function onLoad(saved_data)
     HR_dual_type_effectiveness=save_table.HR_dual_type_effectiveness
     HR_immunities=save_table.HR_immunities
     HR_gym_leader_boosters=save_table.HR_gym_leader_boosters
-    HR_hard_gym_leaders=save_table.HR_hard_gym_leaders
     HR_hp_rule_2=save_table.HR_hp_rule_2
     -- Helpers.
     HELPER_remove_non_player_items=save_table.HELPER_remove_non_player_items
@@ -8764,9 +8750,11 @@ function onLoad(saved_data)
     leadersGen=save_table.leadersGen
     -- Background.
     pokeBackground=save_table.pokeBackground
+    -- PMTU Pokedex Opt-in.
+    useGlobalPokedex=save_table.useGlobalPokedex
     --@Thanathoum
 	  --Cloned Pokemon
-    clonedPokemonData=save_table.clonedPokemonData  
+    clonedPokemonData=save_table.clonedPokemonData
   end
 
   -- Do some safety checks.
@@ -8965,14 +8953,13 @@ function onLoad(saved_data)
   UI.setAttribute("setDualTypeEffectiveness", "isOn", HR_dual_type_effectiveness)
   UI.setAttribute("setImmunities", "isOn", HR_immunities)
   UI.setAttribute("setGymLeaderBoosters", "isOn", HR_gym_leader_boosters)
-  --UI.setAttribute("setHardGymLeaders", "isOn", HR_hard_gym_leaders)
   UI.setAttribute("setHpRule2", "isOn", HR_hp_rule_2)
   -- Helpers.
   UI.setAttribute("setRemoveNonUsedItems", "isOn", HELPER_remove_non_player_items)
 
   -- Rebind the hotkeys.
   addHotkey("Battle Wild Pokemon",  function(player_color, hovered_object, point, key_up) battle_wild_pokemon(hovered_object) end)
-  addHotkey("Query Pokemon Info",  function(player_color, hovered_object, point, key_up) query_pokemon_info(hovered_object, player_color) end)
+  addHotkey("Query Pokemon Info",   function(player_color, hovered_object, point, key_up) query_pokemon_info(hovered_object, player_color) end)
   addHotkey("Change Seat - Yellow", function(player_color, hovered_object, point, key_up) change_seat(player_color, "Yellow") end)
   addHotkey("Change Seat - Green",  function(player_color, hovered_object, point, key_up) change_seat(player_color, "Green") end)
   addHotkey("Change Seat - Blue",   function(player_color, hovered_object, point, key_up) change_seat(player_color, "Blue") end)
@@ -8986,9 +8973,6 @@ function onLoad(saved_data)
   print_changelog()
 
   -- See what optional rules are enabled and print them for the users.
-  if HR_hard_gym_leaders then
-    printHardGymLeadersRules()
-  end
   if HR_hp_rule_2 then
     printHpRule2Rules()
   end
@@ -9001,13 +8985,15 @@ function onLoad(saved_data)
   if HR_gym_leader_boosters then
     printGymLeaderBoostersRules()
   end
+  if useGlobalPokedex then
+    printPmtuPokedexInfo()
+  end
 end
 
 function print_changelog()
-  printToAll("Last update on 12 Nov 2025 - v4.04 \
-     - Z-A Megas have been added! \
-     -- Some models are missing. They will trickle in as they are completed. \
-     - Pokedex Query should be fixed (setup your Game Keys!). \
+  printToAll("Last update on 21 Nov 2025 - v4.05 \
+     - Opt-in to the Global PMTU Pokédex to track progress throughout your runs. See https://pmtu-pokedex.com! \
+     - More Z-A Mega models were added \
      - Bug fixes",
   "Pink")
 end
@@ -9090,7 +9076,6 @@ function onSave()
     original_music_enabled=original_music_enabled,
     remix_music_enabled=remix_music_enabled,
     -- House Rules.
-    HR_hard_gym_leaders=HR_hard_gym_leaders,
     HR_hp_rule_2=HR_hp_rule_2,
     HR_dual_type_effectiveness=HR_dual_type_effectiveness,
     HR_immunities=HR_immunities,
@@ -9101,9 +9086,11 @@ function onSave()
     leadersGen=leadersGen,
     -- Background.
     pokeBackground=pokeBackground,
+    -- PMTU Pokedex Opt-in.
+    useGlobalPokedex=useGlobalPokedex,
     --@Thanathoum
     -- Cloned Pokemon.
-    clonedPokemonData=clonedPokemonData
+    clonedPokemonData=clonedPokemonData,
   }
   return JSON.encode(save_table)
 end
@@ -9215,7 +9202,6 @@ function battle_wild_pokemon(chip)
   -- Basic checks.
   if not chip or not chip.hasTag("Pokemon Token") then return end
   if not isFaceUp(chip) then
-    print("You must flip the Pokémon Token before sending it to the Arena for battle")
     return
   end
 
@@ -9290,7 +9276,21 @@ function query_pokemon_info(item, player_color)
     if pokedex_info then
       change_pokedex_page(pokedex_info, player_color, pokemon_data.name)
     else
-      print("Could not find Pokédex info for " .. pokemon_data.name .. ". Tell the developer they are bad. :)")
+      print("Could not find Pokedex info for " .. pokemon_data.name .. ". Tell the developer they are bad. :)")
+    end
+
+    -- Query Pokedex backend for capture info.
+    local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+    if handler then
+      handler.call("queryPlayerCaught", {
+        pokemon_name = pokemon_data.name,
+        color = player_color,
+        callback_fn = "onPokedexQueryPlayerCaught",
+      })
+      handler.call("querySpeciesCaughtSummary", {
+        pokemon_name = pokemon_data.name,
+        callback_fn = "onPokedexQuerySpeciesSummary",
+      })
     end
 
     return
@@ -9347,6 +9347,42 @@ function query_pokemon_info(item, player_color)
     end
     return
   end
+end
+
+-- Callback from Pokedex handler: did this player catch the species?
+function onPokedexQueryPlayerCaught(params)
+  if not params or params.ok == false then
+    if params and params.error then
+      print("[Pokédex] player-caught lookup failed: " .. tostring(params.error))
+    end
+    return
+  end
+
+  local name = Player[params.color].steam_name or "Unknown"
+  if params.caught then
+    local shiny_substring = " "
+    if params.shiny == true then
+      shiny_substring = " [Shiny] "
+    end
+    printToAll("[Pokédex] " .. params.pokemon_name .. shiny_substring .. "already registered in " .. tostring(name) .. "'s Pokédex")
+  else
+    printToAll("[Pokédex] " .. params.pokemon_name .. " is not registered in " .. tostring(name) .. "'s Pokédex")
+  end
+end
+
+-- Callback from Pokedex handler: species caught totals.
+function onPokedexQuerySpeciesSummary(params)
+  if not params or params.ok == false then
+    if params and params.error then
+      local name = params.pokemon_name or "?"
+      print("[Pokédex] species summary failed for " .. tostring(name) .. ": " .. tostring(params.error))
+    end
+    return
+  end
+
+  local total = params.total_players or 0
+  local shiny = params.shiny_players or 0
+  printToAll("[Pokédex] " .. params.pokemon_name .. " caught by " .. tostring(total) .. " player(s) (shiny: " .. tostring(shiny) .. ")")
 end
 
 -- Help function to print the evolutions of a Pokemon.
@@ -9527,6 +9563,18 @@ function beginSetup(player, value, id)
   local starterPokeball = getObjectFromGUID(STARTER_POKEBALL_GUID)
   starterPokeball.call("beginSetup2", params)
 
+  -- If we are not using the Pokedex, remove the object.
+  if not useGlobalPokedex then
+    print("Opting out of Global PMTU Pokédex")
+    local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+    if handler then
+      destroyObject(handler)
+    end
+  else
+    -- Register everyone for the Pokedex.
+    registerAllPlayersForPokedex()
+  end
+
   local rivalEventPokeball = getObjectFromGUID(RIVAL_EVENT_POKEBALL_GUID)
   rivalEventPokeball.call("setRivalRegion", eventRivalRegion)
 end
@@ -9655,6 +9703,14 @@ function filterTechnicalMachines()
   filterTMs = not filterTMs
 end
 
+function globalPokedexToggle()
+  useGlobalPokedex = not useGlobalPokedex
+
+  if useGlobalPokedex then
+    printPmtuPokedexInfo()
+  end
+end
+
 -----------------
 -- Gym Leaders.
 -----------------
@@ -9722,7 +9778,7 @@ function setLeaders(gen, isOn)
     "Pink")
   elseif leadersGen == -3 then
     -- Gen Match Gym Leaders.
-    printToAll("\nGen Match Leaders: Enabled \
+    printToAll("Gen Match Leaders: Enabled \
   - Gen Match Gym Leaders Rules: \
     * This will cause Gym Leaders to be randomly chosen from all matching enabled Pokemon generations.", 
     "Pink")
@@ -9789,7 +9845,9 @@ function reinitialize_hand_zones(hand_config_table)
 
   -- Get the count of current players.
   local solo_game = (get_player_count() == 1)
-  print("Solo game detected. Not removing Hands for other players.")
+  if solo_game then
+    print("Solo game detected. Not removing Hands for other players.")
+  end
 
   -- Move the player hands we care about. If the player does not exist,
   -- we can leave them in them in the sky for deletion.
@@ -9926,23 +9984,6 @@ end
 -- Scripted house rule setters and getters.
 -----------------
 
-function hardGymLeadersSet(player, isOn)
-  HR_hard_gym_leaders = stringToBoolean[isOn]
-
-  -- If Hard Gym Leaders was just turned on, give a log statement explaining the rules.
-  if HR_hard_gym_leaders then
-    printHardGymLeadersRules()
-  else
-    printToAll("Hard Gym Leaders: Disabled")
-  end
-end
-
-function printHardGymLeadersRules()
-  --   printToAll("\nHard Gym Leaders: Enabled \
-  -- - TODO ",
-  --   "Pink")
-end
-
 function hpRule2Set(player, isOn)
   HR_hp_rule_2 = stringToBoolean[isOn]
 
@@ -9959,7 +10000,7 @@ function getHpRule2Set()
 end
 
 function printHpRule2Rules()
-  printToAll("\nHP Rule 2: Enabled \
+  printToAll("HP Rule 2: Enabled \
   - HP Rule 2 Rules: \
     * Pokémon HP is equal to their level. \
     * HP resets after each battle. \
@@ -9984,7 +10025,7 @@ function getDualTypeEffectiveness()
 end
 
 function printDualTypeRules()
-  printToAll("\nDual Type Effectiveness: Enabled \
+  printToAll("Dual Type Effectiveness: Enabled \
   - Dual Type Effectiveness Rules: \
     * Secondary Pokémon types are considered for effectiveness. \
     * Super-Weak (-3) / Weak (-2) / Neutral / Effective (+2) / Super-Effective (+3)", 
@@ -10035,7 +10076,7 @@ function getImmunitiesEnabled()
 end
 
 function printImmunitiesRules()
-  printToAll("\nImmunities: Enabled \
+  printToAll("Immunities: Enabled \
   - Immunity Rules: \
     * If a Pokemon's type(s) is/are immune, the move has -3 Attack Strength and all move effects are ignored. \
     * Immunity overrides weakness/resistance. \
@@ -10050,6 +10091,10 @@ function printImmunitiesRules()
     "Pink")
 end
 
+function printPmtuPokedexInfo()
+  printToAll("You are opting in to the Global PMTU Pokédex. Navigate to https://pmtu-pokedex.com to track your progress and see leaderboards!")
+end
+
 function gymLeaderBoostersSet(player, isOn)
   HR_gym_leader_boosters = stringToBoolean[isOn]
 
@@ -10062,7 +10107,7 @@ function gymLeaderBoostersSet(player, isOn)
 end
 
 function printGymLeaderBoostersRules()
-  printToAll("\nGym Leader Boosters: Enabled \
+  printToAll("Gym Leader Boosters: Enabled \
   - Gym Leader Boosters Rules: \
     * When battling a Gym Leader, Elite 4, Team Rocket, etc. they have a 45% chance to get a random booster for the duration of the battle.", 
     "Pink")
@@ -10093,7 +10138,7 @@ function removeNonUsedItemsSet(player, isOn)
 end
 
 function printRemoveNonUsedItemsWarning()
-  printToAll("\nRemove Non-Player Racks: Enabled \
+  printToAll("Remove Non-Player Racks: Enabled \
   - After setup the mod will auto-remove all racks, etc. not used by players for you.", 
     "Pink")
 end
@@ -11448,4 +11493,23 @@ end
 
 function get_remix_music_enabled()
   return remix_music_enabled
+end
+
+---------------------------------
+-- Pokedex.
+---------------------------------
+
+-- Register the host.
+function registerAllPlayersForPokedex()
+  local handler = getObjectFromGUID(POKEDEX_HANDLER_GUID)
+  if not handler then
+    return
+  end
+
+  -- Register all players.
+  for _, player in pairs(Player.getPlayers()) do
+    if player.seated then
+      handler.call("registerPlayer", { color = player.color })
+    end
+  end
 end

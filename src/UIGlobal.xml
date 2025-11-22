@@ -1,24 +1,32 @@
 <Defaults>
-    <Text class="UIText" fontSize="18" fontStyle="Bold" Color="#FFFFFF"/>
+    <Text class="UIText" fontSize="18" fontStyle="Bold" color="#FFFFFF"/>
 </Defaults>
 
-<Panel id="WelcomeMessage" width="564" height="375" returnToOriginalPositionWhenReleased="false" color="#DDDDDD">
-    <VerticalLayout padding="15" spacing="15" childForceExpandHeight="false">
+<!-- Welcome Message. -->
+<Panel id="WelcomeMessage" width="600" height="475" returnToOriginalPositionWhenReleased="false" color="#DDDDDD">
+    <VerticalLayout padding="18" spacing="10" childForceExpandHeight="false">
         <Text text="Join the Discord Channel" fontSize="20" fontStyle="Bold"/>
-        <Text fontSize="16" text="500+ Members. Discuss the game, suggest new features, arrange sessions to play with other members and browse additional content. https://discord.gg/hkVrKar"/>
-        <Text fontSize="16" text=""/>
+        <Text fontSize="16" alignment="UpperLeft" text="500+ Members. Discuss the game, suggest new features, arrange sessions to play with other members and browse additional content."/>
+        <Text fontSize="16" alignment="UpperCenter" text="https://discord.gg/hkVrKar"/>
+        <Text text="" preferredHeight="30"/>
         <Text text="Notice" fontSize="20" fontStyle="Bold"/>
-        <Text fontSize="16" alignment="MiddleLeft" text="Don't forget to setup your hotkeys in Options > Game Keys for a faster game. :)"/>
-        <Text fontSize="16" alignment="MiddleLeft" text="Don't delete racks, etc. until after you finish the setup process."/>
-        <Text fontSize="16" alignment="MiddleLeft" text="See change log in the logger for latest update information."/>
+        <Text fontSize="16" alignment="UpperLeft" text="Use the optional Global Pokedex to track catches from game-to-game! See https://pmtu-pokedex.com"/>
+        <Text fontSize="16" alignment="UpperLeft" text="Do not forget to setup your hotkeys in Options > Game Keys for a faster game."/>
+        <Text fontSize="16" alignment="UpperLeft" text="Do not delete racks, etc. until after you finish the setup process."/>
+        <Text fontSize="16" alignment="UpperLeft" text="See change log in the logger for latest update information."/>
+        <LayoutElement flexibleHeight="1"/>
+        <Text text="" preferredHeight="72"/>
         <Button text="Close" preferredHeight="40" width="300" onClick="start"/>
     </VerticalLayout>
 </Panel>
+
 <Panel id="Settings" visibility="false" width="720" height="850" returnToOriginalPositionWhenReleased="false" allowDragging="true" color="#DDDDDD">
     <VerticalLayout padding="15" spacing="15" childForceExpandHeight="false">
+
+        <!-- Region Selection. -->
         <VerticalLayout>
             <Text fontSize="18" text="Select Region" alignment="MiddleLeft" fontStyle="Bold"/>
-            <Dropdown id="regionDropdown" onValueChanged="regionMapSet">
+            <Dropdown id="regionDropdown" onValueChanged="regionMapSet" preferredWidth="320" preferredHeight="30">
                 <Option selected="true">-- Select Region --</Option>
                 <Option>Kanto</Option>
                 <Option>Johto</Option>
@@ -35,30 +43,40 @@
                 <Option>Random</Option>
             </Dropdown>
         </VerticalLayout>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Pokemon Generations. -->
         <Text minHeight="30" fontSize="18" text="Select Pokemon Generations" alignment="LowerLeft" fontStyle="Bold"/>
-        <Text minHeight="20" fontSize="16" text="150 or more Pokémon are suggested for this game." alignment="LowerLeft"/>
+        <Text minHeight="20" fontSize="16" text="150 or more Pokemon are suggested for this game." alignment="LowerLeft"/>
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
-            <Toggle id="gen1ToggleBtn" onValueChanged="gen1Set" interactable="true">Gen I (151 Pokémon)   </Toggle>
-            <Toggle id="gen2ToggleBtn" onValueChanged="gen2Set" interactable="true">Gen II (100 Pokémon)  </Toggle>
-            <Toggle id="gen3ToggleBtn" onValueChanged="gen3Set" interactable="true">Gen III (136 Pokémon) </Toggle>
+            <Toggle id="gen1ToggleBtn" onValueChanged="gen1Set" interactable="true">Gen I (151 Pokemon)   </Toggle>
+            <Toggle id="gen2ToggleBtn" onValueChanged="gen2Set" interactable="true">Gen II (100 Pokemon)  </Toggle>
+            <Toggle id="gen3ToggleBtn" onValueChanged="gen3Set" interactable="true">Gen III (136 Pokemon) </Toggle>
         </HorizontalLayout>
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
-            <Toggle id="gen4ToggleBtn" onValueChanged="gen4Set" interactable="true">Gen IV (107 Pokémon) </Toggle>
-            <Toggle id="gen5ToggleBtn" onValueChanged="gen5Set" interactable="true">Gen V (171 Pokémon)  </Toggle>
-            <Toggle id="gen6ToggleBtn" onValueChanged="gen6Set" interactable="true">Gen VI (73 Pokémon)  </Toggle>
+            <Toggle id="gen4ToggleBtn" onValueChanged="gen4Set" interactable="true">Gen IV (107 Pokemon) </Toggle>
+            <Toggle id="gen5ToggleBtn" onValueChanged="gen5Set" interactable="true">Gen V (171 Pokemon)  </Toggle>
+            <Toggle id="gen6ToggleBtn" onValueChanged="gen6Set" interactable="true">Gen VI (73 Pokemon)  </Toggle>
         </HorizontalLayout>
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
-            <Toggle id="gen7ToggleBtn" onValueChanged="gen7Set" interactable="true">Gen VII (111 Pokémon)  </Toggle>
-            <Toggle id="gen8ToggleBtn" onValueChanged="gen8Set" interactable="true">Gen VIII (133 Pokémon) </Toggle>
-            <Toggle id="gen9ToggleBtn" onValueChanged="gen9Set" interactable="true">Gen IX (120 Pokémon)   </Toggle>
+            <Toggle id="gen7ToggleBtn" onValueChanged="gen7Set" interactable="true">Gen VII (111 Pokemon)  </Toggle>
+            <Toggle id="gen8ToggleBtn" onValueChanged="gen8Set" interactable="true">Gen VIII (133 Pokemon) </Toggle>
+            <Toggle id="gen9ToggleBtn" onValueChanged="gen9Set" interactable="true">Gen IX (120 Pokemon)   </Toggle>
         </HorizontalLayout>
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
-            <Toggle id="customToggleBtn" onValueChanged="customSet" interactable="true">Custom (? Pokémon) </Toggle>
+            <Toggle id="customToggleBtn" onValueChanged="customSet" interactable="true">Custom (? Pokemon) </Toggle>
         </HorizontalLayout>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Gym Leaders and Rival Region. -->
         <HorizontalLayout spacing="30" childForceExpandHeight="false">
             <VerticalLayout>
                 <Text fontSize="18" text="Select Gym Leaders" alignment="MiddleLeft" fontStyle="Bold"/>
-                <Dropdown id="genLeaderDropdown" onValueChanged="genLeadersSet">
+                <Dropdown id="genLeaderDropdown" onValueChanged="genLeadersSet" preferredWidth="320" preferredHeight="30">
                     <Option selected="true">Gen I</Option>
                     <Option>Gen II</Option>
                     <Option>Gen III</Option>
@@ -78,7 +96,7 @@
             </VerticalLayout>
             <VerticalLayout>
                 <Text fontSize="18" text="Select Rival Region" alignment="MiddleLeft" fontStyle="Bold"/>
-                <Dropdown id="rivalRegionDropdown" onValueChanged="rivalRegionSet">
+                <Dropdown id="rivalRegionDropdown" onValueChanged="rivalRegionSet" preferredWidth="320" preferredHeight="30">
                     <Option selected="true">Kanto</Option>
                     <Option>Johto</Option>
                     <Option>Hoenn</Option>
@@ -95,6 +113,11 @@
                 </Dropdown>
             </VerticalLayout>
         </HorizontalLayout>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Custom Gym Leader Options. -->
         <Text fontSize="18" text="Custom Gym Leader Options" alignment="MiddleLeft" fontStyle="Bold" padding="0"/>
         <ToggleGroup id="customGymLeaderOptions" onValueChanged="customGymLeadersOptionsSet">
             <HorizontalLayout spacing="5" childForceExpandHeight="false">
@@ -103,29 +126,49 @@
                 <Toggle tooltipOffset="-100" tooltip="Available custom gym leaders will always be used for their given tier.">Always Use</Toggle>
             </HorizontalLayout>
         </ToggleGroup>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Scripted House Rules. -->
         <VerticalLayout>
             <Text fontSize="18" text="Scripted House Rules (Optional)" alignment="MiddleLeft" fontStyle="Bold"/>
             <HorizontalLayout spacing="15" childForceExpandHeight="false">
-                <Toggle id="setDualTypeEffectiveness" onValueChanged="dualTypeEffectivenessSet" interactable="true" >Dual Type Effectiveness</Toggle>
-                <Toggle id="setImmunities" onValueChanged="immunitiesSet" interactable="true" >Immunities</Toggle>
-                <Toggle id="setGymLeaderBoosters" onValueChanged="gymLeaderBoostersSet" interactable="true" >Gym Leader Boosters (45% chance)</Toggle>
-                <Toggle id="setHpRule2" onValueChanged="hpRule2Set" interactable="true" >HP Rule 2</Toggle>
-                <!--<Toggle id="setHardGymLeaders" onValueChanged="hardGymLeadersSet" interactable="true" >Hard Gym Leaders</Toggle>-->
+                <Toggle id="setDualTypeEffectiveness" onValueChanged="dualTypeEffectivenessSet" interactable="true">Dual Type Effectiveness</Toggle>
+                <Toggle id="setImmunities" onValueChanged="immunitiesSet" interactable="true">Immunities</Toggle>
+                <Toggle id="setGymLeaderBoosters" onValueChanged="gymLeaderBoostersSet" interactable="true">Gym Leader Boosters (45% chance)</Toggle>
+                <Toggle id="setHpRule2" onValueChanged="hpRule2Set" interactable="true">HP Rule 2</Toggle>
             </HorizontalLayout>
         </VerticalLayout>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Helpers. -->
         <VerticalLayout>
             <Text fontSize="18" text="Helpers (Optional)" alignment="MiddleLeft" fontStyle="Bold"/>
             <HorizontalLayout spacing="15" childForceExpandHeight="false">
                 <Toggle id="setRemoveNonUsedItems" onValueChanged="removeNonUsedItemsSet" interactable="true" tooltip="Removes non-used racks, Pokecoins, etc. for non-player controlled player slots.">Remove Non-Used Racks</Toggle>
             </HorizontalLayout>
         </VerticalLayout>
-        <Text minHeight="65" fontSize="16" text="Modifiers" alignment="LowerLeft" fontStyle="Bold"/>
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Modifiers. -->
+        <Text minHeight="30" fontSize="16" text="Modifiers" alignment="LowerLeft" fontStyle="Bold"/>
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
             <Toggle isOn="false" tooltipOffset="-400" onValueChanged="randomStartersToggle" tooltip="Each player is dealt a random starter at the beginning of the game">Random Starters</Toggle>
-            <Toggle isOn="true"  tooltipOffset="-400" onValueChanged="filterTechnicalMachines" tooltip="Filter and balance the Technical Machine cards so that the average TM drawn is much better">Filtered TMs</Toggle>
+            <Toggle isOn="true" tooltipOffset="-400" onValueChanged="filterTechnicalMachines" tooltip="Filter and balance the Technical Machine cards so that the average TM drawn is much better">Filtered TMs</Toggle>
+            <Toggle isOn="false" tooltipOffset="150" onValueChanged="globalPokedexToggle" tooltip="Opt-in to the Global Pokedex found at https://pmtu-pokedex.com">Global Pokedex</Toggle>
             <Toggle isOn="false" tooltipOffset="-400" onValueChanged="pokeBackgroundToggle" tooltip="Enable a random Pokemon-themed background">Pokemon Background</Toggle>
         </HorizontalLayout>
-        <!--Toggle isOn="false" tooltipOffset="-400" onValueChanged="battleScriptingToggle" interactable="false">Battle Scripting (Experimental)</Toggle-->
+        <!-- <Toggle isOn="false" tooltipOffset="-400" onValueChanged="battleScriptingToggle" interactable="false">Battle Scripting (Experimental)</Toggle> -->
+
+        <!-- Divider. -->
+        <Panel preferredHeight="2" color="#BBBBBB"/>
+
+        <!-- Bottom Buttons. -->
         <HorizontalLayout spacing="15" childForceExpandHeight="false">
             <Button text="Close" preferredHeight="40" width="100" onClick="closeSettings"/>
             <Button id="beginBtn" text="Begin Setup" preferredHeight="40" width="100" onClick="beginSetup" interactable="false"/>
