@@ -1427,7 +1427,7 @@ gen5PokemonData =
   { name="Carracosta",      level=6, types={ "Water", "Rock" }, moves={ "Wide Guard", "Brine" },guids={ "493a52", "ff9d76" }, model_GUID="212e44" },
   { name="Archen",          level=4, types={ "Rock", "Flying" }, moves={ "Dragon Claw", "Rock Throw" }, guids={ "dfadef" },                     evoData={ { cost=2, ball=RED, gen=5, guids={ "fe2d6b" }, model_GUID="e52be5", spawn_effect="Physical Attack" } }, model_GUID="fe5542" },
   { name="Archeops",        level=6, types={ "Rock", "Flying" }, moves={ "Rock Slide", "Pluck" },      guids={ "d1e259", "fe2d6b" }, model_GUID="e52be5", spawn_effect="Physical Attack" },
-  { name="Trubbish",        level=3, types={ "Poison" },   moves={ "Clear Smog", "Pound" },            guids={ "c0ee99" },                     evoData={ { cost=2, ball=YELLOW, gen=5, guids={ "cf4c7d" }, model_GUID="317f1f" } }, model_GUID="8eef4f" },
+  { name="Trubbish",        level=3, types={ "Poison" },   moves={ "Clear Smog", "Pound" },            guids={ "c0ee99" },                     evoData={ { cost=2, ball=YELLOW, gen=5, guids={ "cf4c7d" } } }, model_GUID="8eef4f" },
   { name="Garbodor",        level=5, types={ "Poison" },   moves={ "Sludge", "Explosion" },            guids={ "427e7e", "cf4c7d" },           evoData={ { cost="GMax", ball=MEGA, gen=5, cycle=true, guids={ "43b26e", "a13dc7" } } }, model_GUID="317f1f", custom_scale=0.7 },
   { name="Zorua",           level=3, types={ "Dark" },     moves={ "Hone Claws", "Agility" },          guids={ "852f7a" },                     evoData={ { cost=2, ball=YELLOW, gen=5, guids={ "ab7a1d" }, model_GUID="fb10d4" } }, model_GUID="04ebbd" },
   { name="Zoroark",         level=5, types={ "Dark" },     moves={ "Night Daze", "U-Turn" },           guids={ "99e127", "ab7a1d" }, model_GUID="fb10d4" },
@@ -8991,9 +8991,11 @@ function onLoad(saved_data)
 end
 
 function print_changelog()
-  printToAll("Last update on 24 Nov 2025 - v4.05 \
+  printToAll("Last update on 01 December 2025 - v4.06 \
      - Opt-in to the Global PMTU Pokédex to track progress throughout your runs. See https://pmtu-pokedex.com! \
-     - More Z-A Mega models were added \
+     - Improved Counter calculations \
+     -- Reversal and Protection are calculated \
+     -- The Counter effect calculations have been improved; X Attacks and (most) Field Effects are calculated \
      - Bug fixes",
   "Pink")
 end

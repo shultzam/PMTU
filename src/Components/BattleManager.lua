@@ -39,11 +39,12 @@ local attackerConfirmed = false
 
 local debug = false
 
--- GUIDS
-local gyms = { "20bcd5", "ec01e5", "f2f4fe", "d8dc51", "b564fd", "22cc88", "c4bd30", "c9dd73", "a0f650", "c970ca", "19db0d" }
 -- Pink, Green, Blue, Yellow, Red, Legendary, Beast.
 local deploy_pokeballs = { "9c4411", "c988ea", "2cf16d", "986cb5", "f66036", "e46f90", "1feef7" }
+-- Zones.
 local wildPokeZone = "f10ab0"
+local defenderZones = { fieldEffect = "357206", status = "3eb652", battleCard = "095fac" }
+local attackerZones = { fieldEffect = "fce3fb", status = "f47feb", battleCard = "f96667" }
 
 local blueRack = nil
 local greenRack = nil
@@ -75,7 +76,7 @@ local defFieldEffect = {name = nil, guid = nil}
 DEFAULT_ARENA_DATA = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -90,7 +91,7 @@ DEFAULT_ARENA_DATA = {
 local attackerData = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -106,7 +107,7 @@ local attackerPokemon=nil
 local defenderData = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -277,7 +278,7 @@ local field_effect_tile_data = {
   ["efa792"] = { effects = { field_effect_ids.spikes, field_effect_ids.renewal }, position = {-46, 1.31, 47.5} },
   ["7b691a"] = { effects = { field_effect_ids.toxicspikes, field_effect_ids.mistyterrain }, position = {-51, 1.31, 45} },
   ["76d12c"] = { effects = { field_effect_ids.rain, field_effect_ids.harshsunlight }, position = {-48.5, 1.31, 45} },
-  ["114ddd"] = { effects = { field_effect_ids.sandstorm, field_effect_ids.stealthrock }, position = {-46, 1.31, 45} },
+  ["114ddd"] = { effects = { field_effect_ids.stealthrock, field_effect_ids.sandstorm }, position = {-46, 1.31, 45} },
   ["03704f"] = { effects = { field_effect_ids.toxicspikes, field_effect_ids.stealthrock }, position = {-51, 1.31, 42.5} }
 }
 
@@ -302,40 +303,6 @@ local battleState = NO_BATTLE
 --Arena Positions
 local defenderPos = {pokemon={-36.01, 4.19}, dice={-36.03, 6.26}, status={-31.25, 4.44}, statusCounters={-31.25, 6.72}, item={-40.87, 4.26}, moveDice={-36.11, 8.66}, booster={-41.09, 13.40}, healthIndicator={-38, 1.06, 2.34}}
 local attackerPos = {pokemon={-36.06,-4.23}, dice={-36.03,-6.15}, status={-31.25,-4.31}, statusCounters={-31.25,-6.74}, item={-40.87,-4.13}, moveDice={-36.11,-8.53}, booster={-41.10, -13.28}, healthIndicator={-38, 1.06, -2.34}}
-
--- This one will likely never be used sadly. There is no way to add a zone to each mod with the same GUID.
--- We can't save the zone as an object. :/
-local xAttackLookupTable = { 
-    ["91bbed"] = true,
-    ["979ce4"] = true,
-    ["017e6a"] = true,
-    ["f062ef"] = true,
-    ["cc20b4"] = true,
-    ["f9ae34"] = true,
-    ["65c113"] = true,
-    ["bdb6b6"] = true
-  }
--- This will return nil if the lookup fails.
-local typeBoosterLookupTable = { 
-    ["Grass Booster"] = "Grass",
-    ["Water Booster"] = "Water",
-    ["Fire Booster"] = "Fire",
-    ["Poison Booster"] = "Poison",
-    ["Ice Booster"] = "Ice",
-    ["Dark Booster"] = "Dark",
-    ["Steel Booster"] = "Steel",
-    ["Psychic Booster"] = "Psychic",
-    ["Ghost Booster"] = "Ghost",
-    ["Fairy Booster"] = "Fairy",
-    ["Ground Booster"] = "Ground",
-    ["Fighting Booster"] = "Fighting",
-    ["Normal Booster"] = "Normal",
-    ["Dragon Booster"] = "Dragon",
-    ["Flying Booster"] = "Flying",
-    ["Electric Booster"] = "Electric",
-    ["Bug Booster"] = "Bug",
-    ["Rock Booster"] = "Rock"
-  }
 
 --------------------------
 -- Save/Load functions.
@@ -453,18 +420,18 @@ function onLoad(saved_data)
     self.createButton({label="CRS", click_function="applyCursedAttacker", function_owner=self, tooltip="Apply Cursed Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
     self.createButton({label="BRN", click_function="applyBurnedAttacker", function_owner=self, tooltip="Apply Burned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
     self.createButton({label="PSN", click_function="applyPoisonedAttacker", function_owner=self, tooltip="Apply Poisoned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
-    self.createButton({label="SLP", click_function="applySleepAttacker", function_owner=self, tooltip="Apply Sleep Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
+    self.createButton({label="SLP", click_function="applySleepAttacker", function_owner=self, tooltip="Apply Sleep Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
     self.createButton({label="PAR", click_function="applyParalyzedAttacker", function_owner=self, tooltip="Apply Paralysis Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
     self.createButton({label="FRZ", click_function="applyFrozenAttacker", function_owner=self, tooltip="Apply Frozen Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
-    self.createButton({label="CNF", click_function="applyConfusionAttacker", function_owner=self, tooltip="Apply Confusion Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={187/255, 170/255, 102/255}})
+    self.createButton({label="CNF", click_function="applyConfusionAttacker", function_owner=self, tooltip="Apply Confusion Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
     -- Defender status buttons.
     self.createButton({label="CRS", click_function="applyCursedDefender", function_owner=self, tooltip="Apply Cursed Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
     self.createButton({label="BRN", click_function="applyBurnedDefender", function_owner=self, tooltip="Apply Burned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
     self.createButton({label="PSN", click_function="applyPoisonedDefender", function_owner=self, tooltip="Apply Poisoned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
-    self.createButton({label="SLP", click_function="applySleepDefender", function_owner=self, tooltip="Apply Sleep Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
+    self.createButton({label="SLP", click_function="applySleepDefender", function_owner=self, tooltip="Apply Sleep Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
     self.createButton({label="PAR", click_function="applyParalyzedDefender", function_owner=self, tooltip="Apply Paralysis Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
     self.createButton({label="FRZ", click_function="applyFrozenDefender", function_owner=self, tooltip="Apply Frozen Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
-    self.createButton({label="CNF", click_function="applyConfusionDefender", function_owner=self, tooltip="Apply Confusion Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={187/255, 170/255, 102/255}})
+    self.createButton({label="CNF", click_function="applyConfusionDefender", function_owner=self, tooltip="Apply Confusion Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
 
     -- Check if we are in battle.
     if inBattle then
@@ -2093,6 +2060,20 @@ local function moveHasEffect(moveData, effectToFind)
   return false
 end
 
+local function parseTypeEnhancerType(card_name)
+  if not card_name then
+    return nil
+  end
+
+  -- Extract the first word when the second is "Booster".
+  local first_word, second_word = string.match(card_name, "^(%S+)%s+(%S+)$")
+  if first_word and second_word == "Booster" then
+    return first_word
+  end
+
+  return nil
+end
+
 function selectMove(index, isAttacker, isRandom)
   -- For safety, sanitize the isRandom parameter.
   if isRandom == nil then
@@ -2144,25 +2125,6 @@ function selectMove(index, isAttacker, isRandom)
     pokemonData.attackValue.movePower = pokemonData.attackValue.movePower + 1
   end
 
-  -- Handle Reversal, for both Pokemon. :)
-  if not isAttacker then
-    -- We are the defender. Did the attacker use Reversal?
-    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
-      updateAttackValueCounter(ATTACKER)
-      print("Adjusting Attacker counter by " .. tostring(pokemonData.attackValue.movePower) .. " for the Reversal effect.")
-      adjustAttackValueCounter(ATTACKER, pokemonData.attackValue.movePower)
-    end
-    -- Do we have Reversal?
-    if moveHasEffect(moveData, status_ids.reversal) then
-      -- Get the opponent data. Make sure the Defender did not pick their move first like a dummy.
-      local opponentData = isAttacker and defenderData or attackerData
-      if opponentData and opponentData.attackValue.level then
-        pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
-        print("Adding " .. tostring(pokemonData.attackValue.movePower) .. " to Defender counter for the Reversal effect.")
-      end
-    end
-  end
-
   -- Check for a few different attach cards.
   if pokemon.vitamin then
     -- Vitamin. Tasty.
@@ -2183,6 +2145,59 @@ function selectMove(index, isAttacker, isRandom)
     -- Check if the Type Enhancer is valid.
     if ((moveData.type and pokemonData.attackValue.movePower > 0) or (pokemon.type_enhancer ~= nil and moveData.name == "Judgement")) and not pokemonData.attackValue.immune then
       pokemonData.attackValue.item = 1
+    end
+  end
+
+  if not isAttacker then
+    -- Get Pokemon names.
+    local attacker_pokemon_name = getPokemonNameInPlay(ATTACKER)
+    local defender_pokemon_name = getPokemonNameInPlay(DEFENDER)
+
+    -- Adjust the Defender move power for Protection effects.
+    if moveHasEffect(attackerData.selectedMoveData, status_ids.protection) then
+      pokemonData.attackValue.movePower = 0
+      if defenderData.vitamin == nil or defenderData.vitamin == false then
+        pokemonData.attackValue.item = 0
+      end
+      printToAll(attacker_pokemon_name .. " protected itself!")
+    end
+    -- Adjust the Attacker (opponent) move power for Protection effects.
+    if moveHasEffect(moveData, status_ids.protection) then
+      if opponentData and opponentData.attackValue.level then
+        opponentData.attackValue.movePower = 0
+        if attackerData.vitamin == nil or attackerData.vitamin == false then
+          opponentData.attackValue.item = 0
+        end
+        updateAttackValueCounter(ATTACKER)
+        printToAll(defender_pokemon_name .. " protected itself!")
+      end
+    end
+    
+    -- Adjust the Defender move power for Reversal effects.
+    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
+      -- Adjust the Attacker move power for Reversal effects.
+      updateAttackValueCounter(ATTACKER)
+      local adjustment = pokemonData.attackValue.movePower
+      if defenderData.vitamin == nil or defenderData.vitamin == false then
+        adjustment = pokemonData.attackValue.movePower + defenderData.attackValue.item
+      end
+      if adjustment > 0 then
+        adjustAttackValueCounter(ATTACKER, adjustment)
+        print("Adjusting "  .. attacker_pokemon_name .. "'s Attack Strength by " .. tostring(adjustment) .. " for the Reversal effect.")
+      end
+    end
+    -- Adjust the Attacker (opponent) data for Reversal effects. 
+    if moveHasEffect(moveData, status_ids.reversal) then
+      -- Make sure the Defender did not pick their move first like a dummy.
+      if opponentData and opponentData.attackValue.level then
+        pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
+        if attackerData.vitamin == nil or attackerData.vitamin == false then
+          pokemonData.attackValue.movePower = pokemonData.attackValue.movePower + attackerData.attackValue.item
+        end
+        if pokemonData.attackValue.movePower > 0 then
+          print("Adjusting "  .. defender_pokemon_name .. "'s Attack Strength by " .. tostring(pokemonData.attackValue.movePower) .. " for the Reversal effect.")
+        end
+      end
     end
   end
 
@@ -4528,7 +4543,10 @@ function sendToArena(params)
           elseif card_name == "Alpha Pokémon" then
             pokemonData.alpha = true
           elseif card_name then
-            pokemonData.type_enhancer = typeBoosterLookupTable[itemCard.getName()]
+            local booster_type = parseTypeEnhancerType(card_name)
+            if booster_type then
+              pokemonData.type_enhancer = booster_type
+            end
           end
         end
       end
@@ -4672,7 +4690,8 @@ function resetTrainerData(isAttacker)
   data.moveData = {}
   data.diceMod = 0
   data.addDice = 0
-  data.attackValue = {level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, total=0, immune=false}
+  -- Use a fresh attackValue table so attacker/defender don't share the same reference.
+  data.attackValue = copyTable(DEFAULT_ARENA_DATA.attackValue)
 end
 
 function clearTrainerData(isAttacker)
@@ -4919,7 +4938,6 @@ function detectStatusCardAndTokens(isAttacker)
 end
 
 function clearPokemonData(isAttacker)
-
   if isAttacker then
       showAtkButtons(false)
       attackerPokemon = nil
@@ -5272,17 +5290,144 @@ end
 function updateAttackValueCounter(isAttacker)
   local atkVal = nil
   local counterGUID = nil
+  local pokemonTypes = {}
+  local moveType = nil
+  local teraActive = nil
+  local teraType = nil
+  local selfFieldEffect = nil
+  local opponentFieldEffect = nil
   if isAttacker then
+    -- Get counter GUID and attack value table.
     counterGUID = atkCounter
     atkVal = attackerData.attackValue
+
+    -- Get the move type.
+    local data = attackerData
+    local move = data.selectedMoveData or attackerPokemon.movesData[data.selectedMoveIndex]
+    moveType = move and move.type
+    -- Get the Pokemon type.
+    pokemonTypes = attackerPokemon.types
+    -- Get the Tera data.
+    teraActive = attackerPokemon.teraActive
+    teraType = attackerPokemon.teraType
+    -- Get the Field Effects.
+    selfFieldEffect = atkFieldEffect.name
+    opponentFieldEffect = defFieldEffect.name
   else
+    -- Get counter GUID and attack value table.
     counterGUID = defCounter
     atkVal = defenderData.attackValue
+    
+    -- Get the move type.
+    local data = defenderData
+    local move = data.selectedMoveData or defenderPokemon.movesData[data.selectedMoveIndex]
+    moveType = move and move.type
+    -- Get the Pokemon type.
+    pokemonTypes = defenderPokemon.types
+    -- Get the Tera data.
+    teraActive = defenderPokemon.teraActive
+    teraType = defenderPokemon.teraType
+    -- Get the Field Effects.
+    selfFieldEffect = defFieldEffect.name
+    opponentFieldEffect = atkFieldEffect.name
   end
 
-  local totalAttack = atkVal.level + atkVal.movePower + atkVal.effectiveness + atkVal.attackRoll + atkVal.item
+  -- If the Tera is active, that's all we consider for types here.
+  if teraActive and teraType and teraType ~= "Stellar" then
+    -- Override to the active Tera type for these effects calculations.
+    pokemonTypes = { teraType }
+  elseif teraActive and teraType == "Stellar" then
+    -- Stellar keeps original typing.
+  end
+
+  -- Helper function used to get attack strength bonus from Field Effects.
+  local function calculate_field_effect_bonus(fieldEffect, moveType, pokemonTypes, isSameSide)
+    if not fieldEffect or not moveType or not pokemonTypes then return 0 end
+    if fieldEffect == field_effect_ids.rain then
+      if moveType == "Water" then
+        return 1
+      elseif moveType == "Fire" then
+        return -1
+      end
+    elseif fieldEffect == field_effect_ids.harshsunlight then
+      if moveType == "Fire" then
+        return 1
+      elseif moveType == "Water" then
+        return -1
+      end
+    elseif fieldEffect == field_effect_ids.electricterrain and moveType == "Electric" then
+      return 1
+    elseif fieldEffect == field_effect_ids.grassyterrain and moveType == "Grass" then
+      return 1
+    elseif fieldEffect == field_effect_ids.psychicterrain and moveType == "Psychic" then
+      return 1
+    elseif fieldEffect == field_effect_ids.mistyterrain then
+      if moveType == "Fairy" then
+        return 1
+      elseif moveType == "Dragon" then
+        return -1
+      end
+    elseif fieldEffect == field_effect_ids.hail then
+      for _, type in ipairs(pokemonTypes) do
+        if type == "Ice" then
+          return 0
+        end
+      end
+      return -1
+    elseif isSameSide and fieldEffect == field_effect_ids.stealthrock then
+      local tempBadBonus = 0
+      for _, type in ipairs(pokemonTypes) do
+        if type == "Steel" or type == "Ground" or type == "Fighting" or type == "Rock" then
+          return 0
+        elseif type == "Flying" or type == "Bug" or type == "Fire" or type == "Ice" then
+          tempBadBonus = tempBadBonus + 3
+        else
+          tempBadBonus = tempBadBonus + 1
+        end
+      end
+      -- If Stealth Rock had an effect, take it into account.
+      if tempBadBonus == 1 or tempBadBonus == 2 then
+        return -1
+      elseif tempBadBonus >= 3 then
+        return -2
+      end
+    elseif fieldEffect == field_effect_ids.sandstorm then
+      for _, type in ipairs(pokemonTypes) do
+        if type == "Ground" or type == "Rock" or type == "Steel" then
+          return 0
+        end
+      end
+      return -1
+    elseif fieldEffectName == field_effect_ids.toxicspikes then
+      -- Ignored.
+    elseif fieldEffectName == field_effect_ids.spikes then
+      -- Ignored. I don't know if this is the Battle Round they entered battle.
+    end
+    return 0
+  end
+  
+  -- Calculate the field effect bonuses.
+  local fieldBonus = calculate_field_effect_bonus(selfFieldEffect, moveType, pokemonTypes, true)
+  fieldBonus = fieldBonus + calculate_field_effect_bonus(opponentFieldEffect, moveType, pokemonTypes, false)
+
+  -- Check if there is an overall Field Effect bonus.
+  local totalAttack = atkVal.level + atkVal.movePower + atkVal.effectiveness + atkVal.attackRoll + atkVal.item + atkVal.booster + atkVal.status
+  totalAttack = totalAttack + fieldBonus
+
   local counter = getObjectFromGUID(counterGUID)
   counter.Counter.setValue(totalAttack)
+end
+
+function getAttackValueCounterValue(isAttacker)
+  local counterGUID = nil
+  if isAttacker then
+    counterGUID = atkCounter
+  else
+    counterGUID = defCounter
+  end
+
+  local counter = getObjectFromGUID(counterGUID)
+  return counter.Counter.getValue()
 end
 
 function clearAttackCounter(isAttacker)
@@ -5646,7 +5791,8 @@ function evolvePoke(params)
         -- Update the arena data level for this Pokemon - in case it is a Mega which is given a +1 level.
         local arenaData = params.isAttacker and attackerData or defenderData
         arenaData.baseLevel = evolvedPokemonData.level
-        arenaData.attackValue = { level = evolvedPokemonData.level + data.diceLevel, movePower = 0, effectiveness = 0, attackRoll = 0, item = 0, immunity = false }
+        arenaData.attackValue = copyTable(DEFAULT_ARENA_DATA.attackValue)
+        arenaData.attackValue.level = evolvedPokemonData.level + data.diceLevel
 
         -- Update the arena calculator.
         updateAttackValueCounter(params.isAttacker)
@@ -5690,7 +5836,10 @@ function evolvePoke(params)
             elseif card_name == "Alpha Pokémon" then
               arenaPokemon.alpha = true
             elseif card_name then
-              arenaPokemon.type_enhancer = typeBoosterLookupTable[card_name]
+              local booster_type = parseTypeEnhancerType(card_name)
+              if booster_type then
+                arenaPokemon.type_enhancer = booster_type
+              end
             end
           end
         end
@@ -6083,22 +6232,252 @@ function countStatusCounters(isAttacker)
   end
 end
 
+-- Returns a display name for the current encounter side.
+function getEncounterTrainerName(isAttacker)
+  local data = isAttacker and attackerData or defenderData
+  if data == nil or data.type == nil then return "Unknown" end
+
+  if data.type == PLAYER then
+    local p = data.playerColor and Player[data.playerColor] or nil
+    return (p and (p.steam_name or p.nickname)) or "Player"
+  elseif data.type == GYM then
+    return data.trainerName or "Gym Leader"
+  elseif data.type == RIVAL then
+    return "Rival " .. (data.trainerName or "???")
+  elseif data.type == TRAINER then
+    return "The Trainer"
+  else
+    return "Unknown"
+  end
+end
+
+-- Returns the name of the Pokémon currently in play for the side.
+function getPokemonNameInPlay(isAttacker)
+  local data = isAttacker and attackerData or defenderData
+  local pokemon = isAttacker and attackerPokemon or defenderPokemon
+  if data == nil or pokemon == nil then return "Unknown Pokémon" end
+
+  local function nameFromRoster(index)
+    return data.pokemon and data.pokemon[index] and data.pokemon[index].name
+  end
+
+  if data.type == GYM then
+    local card = data.trainerGUID and getObjectFromGUID(data.trainerGUID) or nil
+    local faceUp = card and Global.call("isFaceUp", card)
+    local idx = faceUp and 1 or 2  -- gym leaders are double-sided
+    return nameFromRoster(idx) or pokemon.name or "Unknown Pokémon"
+  elseif data.type == RIVAL then
+    local card = pokemon.pokemonGUID and getObjectFromGUID(pokemon.pokemonGUID) or nil
+    local faceUp = card and Global.call("isFaceUp", card)
+    local idx = faceUp and 1 or 2  -- rival cards are also double-sided
+    return nameFromRoster(idx) or pokemon.name or "Unknown Pokémon"
+  else
+    return pokemon.name or "Unknown Pokémon"
+  end
+end
+
 function onObjectEnterScriptingZone(zone, object)
-  -- Check if the zone is of interest is the wildPokeZone.
-  if zone.getGUID() == wildPokeZone and defenderData.type == nil then
-    local pokeGUID = object.getGUID()
-    local data = Global.call("GetPokemonDataByGUID", {guid=pokeGUID})
+  -- Collect some information.
+  local zone_guid = zone.getGUID()
+  local object_name = object.getName()
+  local object_guid = object.getGUID()
+
+  -- Determine which zone was entered.
+  if zone_guid == wildPokeZone and defenderData.type == nil then
+    local data = Global.call("GetPokemonDataByGUID", {guid=object_guid})
     if data ~= nil then
       showWildPokemonButton(true)
-      wildPokemonGUID = pokeGUID
+      wildPokemonGUID = object_guid
+    end
+  elseif zone_guid == defenderZones.battleCard then
+    -- Do we recognize the booster name?
+    if object_name == "X Attack" then
+      -- Set the Defender's Booster attack value to 2.
+      defenderData.attackValue.booster = 2
+      local pokemon_name = getPokemonNameInPlay(DEFENDER)
+      printToAll("Used X Attack! " .. tostring(pokemon_name) .. "'s Attack rose!")
+
+      -- If the move was already calculated, let's adjust the calculator.
+      local current_value = getAttackValueCounterValue(DEFENDER)
+      if current_value == defenderData.attackValue.level + defenderData.attackValue.movePower + defenderData.attackValue.effectiveness then
+        adjustAttackValueCounter(DEFENDER, defenderData.attackValue.booster)
+      end
+    end
+  elseif zone_guid == defenderZones.status then
+    -- Print out the status.
+    announceStatus(object_name, getPokemonNameInPlay(DEFENDER))
+
+    -- Only the Burn status affects move power.
+    if object_name == status_ids.burn then
+      defenderData.attackValue.status = -1
+    end
+  elseif zone_guid == defenderZones.fieldEffect then
+    -- Determine the field effect in play.
+    local tile_data = field_effect_tile_data[object.getGUID()]
+    if not tile_data then return end
+    local index = Global.call("isFaceUp", object) and 1 or 2
+    local active_effect = tile_data.effects[index]
+    if not active_effect then return end
+
+    -- Announce the Field Effect and save it.
+    defFieldEffect = {name=active_effect, guid=object.getGUID()}
+    announceFieldEffect(active_effect, DEFENDER)
+  elseif zone_guid == attackerZones.fieldEffect then
+    -- Determine the field effect in play.
+    local tile_data = field_effect_tile_data[object.getGUID()]
+    if not tile_data then return end
+    local index = Global.call("isFaceUp", object) and 1 or 2
+    local active_effect = tile_data.effects[index]
+    if not active_effect then return end
+
+    -- Announce the Field Effect and save it.
+    announceFieldEffect(active_effect, ATTACKER)
+    atkFieldEffect = {name=active_effect, guid=object.getGUID()}
+  elseif zone_guid == attackerZones.status then
+    -- Print out the status.
+    announceStatus(object_name, getPokemonNameInPlay(ATTACKER))
+
+    -- Only the Burn status affects move power.
+    if object_name == status_ids.burn then
+      attackerData.attackValue.status = -1
+    end
+  elseif zone_guid == attackerZones.battleCard then
+    -- Do we recognize the booster name?
+    if object_name == "X Attack" then
+      -- Set the Attacker's Booster attack value to 2.
+      attackerData.attackValue.booster = 2
+      local pokemon_name = getPokemonNameInPlay(ATTACKER)
+      printToAll("Used X Attack! " .. tostring(pokemon_name) .. "'s Attack rose!")
+
+      -- If the move was already calculated, let's adjust the calculator.
+      local current_value = getAttackValueCounterValue(ATTACKER)
+      if current_value == attackerData.attackValue.level + attackerData.attackValue.movePower + attackerData.attackValue.effectiveness then
+        adjustAttackValueCounter(ATTACKER, attackerData.attackValue.booster)
+      end
     end
   end
 end
 
 function onObjectLeaveScriptingZone(zone, object)
-  if inBattle == false then
+  -- Collect some information.
+  local zone_guid = zone.getGUID()
+  local object_name = object.getName()
+
+  -- Determine which zone was entered.
+  if zone_guid == wildPokeZone and inBattle == false then
     showWildPokemonButton(false)
+  elseif zone_guid == defenderZones.battleCard then
+    -- Set the Defender's Booster attack value to 0.
+    defenderData.attackValue.booster = 0
+    updateAttackValueCounter(DEFENDER)
+  elseif zone_guid == defenderZones.status then
+    -- Set the Defender's Status attack value to 0.
+    defenderData.attackValue.status = 0
+  elseif zone_guid == defenderZones.fieldEffect then
+    defFieldEffect = {name=nil, guid=nil}
+  elseif zone_guid == attackerZones.fieldEffect then
+    atkFieldEffect = {name=nil, guid=nil}
+  elseif zone_guid == attackerZones.status then
+    -- Set the Attacker's Status attack value to 0.
+    attackerData.attackValue.status = 0
+  elseif zone_guid == attackerZones.battleCard then
+    -- Set the Attacker's Booster attack value to 0.
+    attackerData.attackValue.booster = 0
+    updateAttackValueCounter(ATTACKER)
   end
+end
+
+-- Prints a flavor message for a field effect on a given side.
+-- effect_name should match field_effect_ids (e.g., "Safeguard", "Spikes", "ElectricTerrain").
+function announceFieldEffect(effect_name, isAttacker)
+  if effect_name == nil then return end
+
+  local side = isAttacker and "Attacking" or "Defending"
+  if effect_name == field_effect_ids.stealthrock then
+    -- Stealth Rock is on the *opposite side* of the team that plays it.
+    side = isAttacker and "Defending" or "Attacking"
+  end
+  local msgs = {
+    [field_effect_ids.safeguard]      = "A veil of light covers the %s team!",
+    [field_effect_ids.mist]           = "Mist shrouded the %s team!",
+    [field_effect_ids.spikes]         = "Spikes were scattered all around the feet of the %s team!",
+    [field_effect_ids.stealthrock]    = "Pointed stones float in the air around the %s team!",
+    [field_effect_ids.toxicspikes]    = "Toxic spikes were scattered around the feet of the %s team!",
+    [field_effect_ids.electricterrain]= "An electric current runs across the battlefield!",
+    [field_effect_ids.grassyterrain]  = "Grass grew to cover the battlefield!",
+    [field_effect_ids.psychicterrain] = "The battlefield got weird!",
+    [field_effect_ids.mistyterrain]   = "Mist swirled around the battlefield!",
+    [field_effect_ids.rain]           = "It started to rain!",
+    [field_effect_ids.harshsunlight]  = "The sunlight turned harsh!",
+    [field_effect_ids.sandstorm]      = "A sandstorm kicked up!",
+    [field_effect_ids.hail]           = "It started to hail!",
+    [field_effect_ids.renewal]        = "A renewing energy surrounded the %s team!"
+  }
+
+  local template = msgs[effect_name]
+  if not template then return end
+
+  -- Try to colorize the log using the closest matching type color.
+  local effect_type_lookup = {
+    [field_effect_ids.safeguard]       = "Normal",
+    [field_effect_ids.mist]            = "Ice",
+    [field_effect_ids.spikes]          = "Ground",
+    [field_effect_ids.stealthrock]     = "Rock",
+    [field_effect_ids.toxicspikes]     = "Poison",
+    [field_effect_ids.electricterrain] = "Electric",
+    [field_effect_ids.grassyterrain]   = "Grass",
+    [field_effect_ids.psychicterrain]  = "Psychic",
+    [field_effect_ids.mistyterrain]    = "Fairy",
+    [field_effect_ids.rain]            = "Water",
+    [field_effect_ids.harshsunlight]   = "Fire",
+    [field_effect_ids.sandstorm]       = "Ground",
+    [field_effect_ids.hail]            = "Ice",
+  }
+  local color = nil
+  local effect_type = effect_type_lookup[effect_name]
+  if effect_type then
+    color = Global.call("type_to_color_lookup", effect_type)
+  end
+
+  local message = template:find("%%s") and string.format(template, side) or template
+  printToAll(message, color)
+end
+
+-- Prints a flavor message for a status being applied to a Pokemon.
+-- status should match status_ids; pokemon_name is the target's display name.
+function announceStatus(status, pokemon_name)
+  if not status or not pokemon_name then return end
+
+  local msgs = {
+    [status_ids.poison]   = "%s was poisoned!",
+    [status_ids.burn]     = "%s was burned!",
+    [status_ids.paralyze] = "%s is paralyzed! It may be unable to move!",
+    [status_ids.sleep]    = "%s fell asleep!",
+    [status_ids.freeze]   = "%s was frozen solid!",
+    [status_ids.confuse]  = "%s became confused!",
+    [status_ids.curse]    = "%s became cursed!",
+  }
+
+  local type_lookup = {
+    [status_ids.poison]   = "Poison",
+    [status_ids.burn]     = "Fire",
+    [status_ids.paralyze] = "Electric",
+    [status_ids.sleep]    = "Psychic",
+    [status_ids.freeze]   = "Ice",
+    [status_ids.confuse]  = "Psychic",
+    [status_ids.curse]    = "Ghost",
+  }
+
+  local template = msgs[status]
+  if not template then return end
+
+  local color = nil
+  local type_name = type_lookup[status]
+  if type_name then
+    color = Global.call("type_to_color_lookup", type_name)
+  end
+
+  printToAll(string.format(template, pokemon_name), color)
 end
 
 --------------------------------------------------------------------------------
