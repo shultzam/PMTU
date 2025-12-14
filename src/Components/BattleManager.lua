@@ -76,7 +76,7 @@ local defFieldEffect = {name = nil, guid = nil}
 DEFAULT_ARENA_DATA = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, effect=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -91,7 +91,7 @@ DEFAULT_ARENA_DATA = {
 local attackerData = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, effect=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -107,7 +107,7 @@ local attackerPokemon=nil
 local defenderData = {
   type = nil,
   dice = {},
-  attackValue={level=0, movePower=0, effectiveness=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
+  attackValue={level=0, movePower=0, effectiveness=0, effect=0, attackRoll=0, item=0, booster=0, status=0, total=0, immune=false},
   previousMove={},
   canSelectMove=true,
   selectedMoveIndex=-1,
@@ -229,6 +229,7 @@ local status_ids = {
   lifeRecovery = "LifeRecovery",
   statusHeal = "StatusHeal",
   revival = "Revival",
+  disable = "Disable",
 
   -- More special statuses.
   custom = "Custom",                      -- We don't want a lot of these. Simulation deal breakers.
@@ -2100,10 +2101,12 @@ function selectMove(index, isAttacker, isRandom)
     text = getObjectFromGUID(defText)
   end
 
-  -- Re-initialize the attackValues, diceMod and addDice values.
-  pokemonData.attackValue.attackRoll = 0
-  pokemonData.attackValue.item = 0
-  pokemonData.attackValue.total = 0
+  -- Re-initialize the attackValue values.
+  local pokemonLevel = pokemonData.attackValue.level
+  local burnPenalty = pokemonData.attackValue.status
+  pokemonData.attackValue = copyTable(DEFAULT_ARENA_DATA.attackValue)
+  pokemonData.attackValue.level = pokemonLevel
+  pokemonData.attackValue.status = burnPenalty
   pokemonData.diceMod = 0
   pokemonData.addDice = 0
 
@@ -2141,17 +2144,49 @@ function selectMove(index, isAttacker, isRandom)
       pokemonData.attackValue.item = 2
     end
   elseif pokemon.type_enhancer then
-    pokemonData.type_enhancer = true
-    -- Check if the Type Enhancer is valid.
-    if ((moveData.type and pokemonData.attackValue.movePower > 0) or (pokemon.type_enhancer ~= nil and moveData.name == "Judgement")) and not pokemonData.attackValue.immune then
+    -- Preserve the actual enhancer type for later checks.
+    pokemonData.type_enhancer = pokemon.type_enhancer
+    local enhancer_type = pokemon.type_enhancer
+    -- Only apply if the move matches the enhancer type (or Judgement, which inherits it).
+    local move_matches_enhancer = moveData.type ~= nil and moveData.type == enhancer_type
+    local judgement_with_enhancer = moveData.name == "Judgement" and enhancer_type ~= nil
+    if (move_matches_enhancer or judgement_with_enhancer) and pokemonData.attackValue.movePower > 0 and not pokemonData.attackValue.immune then
       pokemonData.attackValue.item = 1
     end
   end
 
+  -- Check for special effects.
   if not isAttacker then
     -- Get Pokemon names.
     local attacker_pokemon_name = getPokemonNameInPlay(ATTACKER)
     local defender_pokemon_name = getPokemonNameInPlay(DEFENDER)
+    
+    -- Adjust the Defender move power for Reversal effects.
+    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
+      -- Adjust the Attacker move power for Reversal effects.
+      updateAttackValueCounter(ATTACKER)
+      local adjustment = pokemonData.attackValue.movePower
+      if defenderData.vitamin == nil or defenderData.vitamin == false then
+        adjustment = pokemonData.attackValue.movePower + defenderData.attackValue.item
+      end
+      if adjustment > 0 then
+        adjustAttackValueCounter(ATTACKER, adjustment)
+        printToAll("Adjusting "  .. attacker_pokemon_name .. "'s Attack Strength by " .. tostring(adjustment) .. " for the Reversal effect.")
+      end
+    end
+    -- Adjust the Attacker (opponent) data for Reversal effects. 
+    if moveHasEffect(moveData, status_ids.reversal) then
+      -- Make sure the Defender did not pick their move first like a dummy.
+      if opponentData and opponentData.attackValue.level then
+        pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
+        if attackerData.vitamin == nil or attackerData.vitamin == false then
+          pokemonData.attackValue.movePower = pokemonData.attackValue.movePower + attackerData.attackValue.item
+        end
+        if pokemonData.attackValue.movePower > 0 then
+          printToAll("Adjusting "  .. defender_pokemon_name .. "'s Attack Strength by " .. tostring(pokemonData.attackValue.movePower) .. " for the Reversal effect.")
+        end
+      end
+    end
 
     -- Adjust the Defender move power for Protection effects.
     if moveHasEffect(attackerData.selectedMoveData, status_ids.protection) then
@@ -2172,32 +2207,15 @@ function selectMove(index, isAttacker, isRandom)
         printToAll(defender_pokemon_name .. " protected itself!")
       end
     end
-    
-    -- Adjust the Defender move power for Reversal effects.
-    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
-      -- Adjust the Attacker move power for Reversal effects.
-      updateAttackValueCounter(ATTACKER)
-      local adjustment = pokemonData.attackValue.movePower
-      if defenderData.vitamin == nil or defenderData.vitamin == false then
-        adjustment = pokemonData.attackValue.movePower + defenderData.attackValue.item
-      end
-      if adjustment > 0 then
-        adjustAttackValueCounter(ATTACKER, adjustment)
-        print("Adjusting "  .. attacker_pokemon_name .. "'s Attack Strength by " .. tostring(adjustment) .. " for the Reversal effect.")
-      end
-    end
-    -- Adjust the Attacker (opponent) data for Reversal effects. 
-    if moveHasEffect(moveData, status_ids.reversal) then
-      -- Make sure the Defender did not pick their move first like a dummy.
-      if opponentData and opponentData.attackValue.level then
-        pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
-        if attackerData.vitamin == nil or attackerData.vitamin == false then
-          pokemonData.attackValue.movePower = pokemonData.attackValue.movePower + attackerData.attackValue.item
-        end
-        if pokemonData.attackValue.movePower > 0 then
-          print("Adjusting "  .. defender_pokemon_name .. "'s Attack Strength by " .. tostring(pokemonData.attackValue.movePower) .. " for the Reversal effect.")
-        end
-      end
+  end
+
+  -- Adjust the move power for ConditionBoost effects.
+  if moveHasEffect(moveData, status_ids.conditionBoost) then
+    local opponentPokemon = isAttacker and defenderPokemon or attackerPokemon
+    if opponentPokemon and opponentPokemon.status ~= nil then
+      pokemonData.attackValue.effect = 1
+      local pokemon_name = isAttacker and attacker_pokemon_name or defender_pokemon_name
+      printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
     end
   end
 
@@ -2775,8 +2793,6 @@ function effectCanTrigger(isAttacker, effect)
   end
 end
 
-
-
 function updateStatus(isAttacker, status)
 
   if status == nil then
@@ -2915,12 +2931,15 @@ function addStatusCounters(isAttacker, numCounters)
 end
 
 function removeStatus(data)
+  if not data then return end
   data.status = nil
   local statusCard = getObjectFromGUID(data.statusCardGUID)
   if statusCard then
     statusCard.destruct()
   end
-  data.statusCardGUID = nil
+  if data then
+    data.statusCardGUID = nil
+  end
 end
 
 function spawnEffectDice(isAttacker)
@@ -3006,7 +3025,6 @@ function spawnDice(move, isAttacker, effects)
     table.insert(diceTable, dice.guid)
   end
 end
-
 
 function increaseAtkArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
@@ -5288,6 +5306,7 @@ function adjustAttackValueCounter(isAttacker, adjustment)
 end
 
 function updateAttackValueCounter(isAttacker)
+  -- Init some values.
   local atkVal = nil
   local counterGUID = nil
   local pokemonTypes = {}
@@ -5296,7 +5315,11 @@ function updateAttackValueCounter(isAttacker)
   local teraType = nil
   local selfFieldEffect = nil
   local opponentFieldEffect = nil
+
+  -- Switch based on which counter is being updated.
   if isAttacker then
+    if not attackerPokemon then return end
+
     -- Get counter GUID and attack value table.
     counterGUID = atkCounter
     atkVal = attackerData.attackValue
@@ -5314,6 +5337,8 @@ function updateAttackValueCounter(isAttacker)
     selfFieldEffect = atkFieldEffect.name
     opponentFieldEffect = defFieldEffect.name
   else
+    if not defenderPokemon then return end
+
     -- Get counter GUID and attack value table.
     counterGUID = defCounter
     atkVal = defenderData.attackValue
@@ -5411,7 +5436,11 @@ function updateAttackValueCounter(isAttacker)
   fieldBonus = fieldBonus + calculate_field_effect_bonus(opponentFieldEffect, moveType, pokemonTypes, false)
 
   -- Check if there is an overall Field Effect bonus.
-  local totalAttack = atkVal.level + atkVal.movePower + atkVal.effectiveness + atkVal.attackRoll + atkVal.item + atkVal.booster + atkVal.status
+  local totalAttack = atkVal.level + atkVal.movePower + atkVal.effect + atkVal.effectiveness + atkVal.attackRoll + atkVal.item + atkVal.booster
+  -- atkVal.status is currently only from Burn. If the movePower is 0, this move does not get -1.
+  if atkVal.movePower > 0 and atkVal.status < 0 then
+    totalAttack = totalAttack + atkVal.status
+  end
   totalAttack = totalAttack + fieldBonus
 
   local counter = getObjectFromGUID(counterGUID)
@@ -6311,6 +6340,17 @@ function onObjectEnterScriptingZone(zone, object)
     if object_name == status_ids.burn then
       defenderData.attackValue.status = -1
     end
+
+    -- Check if the Attacker used a ConditionBoost move.
+    local moveIndex = tonumber(attackerData.selectedMoveIndex)
+    if attackerPokemon and attackerPokemon.movesData and moveIndex and moveIndex >= 1 then
+      local attackerMoveData = attackerPokemon.movesData[moveIndex]
+      if moveHasEffect(attackerMoveData, status_ids.conditionBoost) and attackerData and attackerData.attackValue.effect == 0 then
+        attackerData.attackValue.effect = 1
+        local pokemon_name = getPokemonNameInPlay(ATTACKER)
+        printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
+      end
+    end
   elseif zone_guid == defenderZones.fieldEffect then
     -- Determine the field effect in play.
     local tile_data = field_effect_tile_data[object.getGUID()]
@@ -6340,6 +6380,17 @@ function onObjectEnterScriptingZone(zone, object)
     -- Only the Burn status affects move power.
     if object_name == status_ids.burn then
       attackerData.attackValue.status = -1
+    end
+
+    -- Check if the Defender used a ConditionBoost move.
+    local moveIndex = tonumber(defenderData.selectedMoveIndex)
+    if defenderPokemon and defenderPokemon.movesData and moveIndex and moveIndex >= 1 then
+      local defenderMoveData = defenderPokemon.movesData[moveIndex]
+      if moveHasEffect(defenderMoveData, status_ids.conditionBoost) and defenderData and defenderData.attackValue.effect == 0 then
+        defenderData.attackValue.effect = 1
+        local pokemon_name = getPokemonNameInPlay(DEFENDER)
+        printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
+      end
     end
   elseif zone_guid == attackerZones.battleCard then
     -- Do we recognize the booster name?
@@ -6373,6 +6424,13 @@ function onObjectLeaveScriptingZone(zone, object)
   elseif zone_guid == defenderZones.status then
     -- Set the Defender's Status attack value to 0.
     defenderData.attackValue.status = 0
+    -- Remove the status.
+    removeStatus(defenderPokemon)
+
+    -- Remove any sort of opponent move effect bonuses (if applicable).
+    if attackerData and attackerData.attackValue.effect ~= 0 then
+      attackerData.attackValue.effect = 0
+    end
   elseif zone_guid == defenderZones.fieldEffect then
     defFieldEffect = {name=nil, guid=nil}
   elseif zone_guid == attackerZones.fieldEffect then
@@ -6380,6 +6438,13 @@ function onObjectLeaveScriptingZone(zone, object)
   elseif zone_guid == attackerZones.status then
     -- Set the Attacker's Status attack value to 0.
     attackerData.attackValue.status = 0
+    -- Remove the status.
+    removeStatus(attackerPokemon)
+
+    -- Remove any sort of opponent move effect bonuses (if applicable).
+    if defenderData and defenderData.attackValue.effect ~= 0 then
+      defenderData.attackValue.effect = 0
+    end
   elseif zone_guid == attackerZones.battleCard then
     -- Set the Attacker's Booster attack value to 0.
     attackerData.attackValue.booster = 0

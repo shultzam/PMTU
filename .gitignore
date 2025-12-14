@@ -1,3 +1,4 @@
 temp_*
 ignore/*
 pdf_extraction/output/*
+pdf_extraction/*.pdf
