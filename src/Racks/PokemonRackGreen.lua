@@ -3,7 +3,6 @@
 --------------------------------------------------------------------------------
 local playerColour = "Green"
 
-local diceBagGUID = "1a64da"
 local figureGUID = "bdde77"
 RECORD_KEEPER_GUID = "ab319d"
 
@@ -13,7 +12,7 @@ local xRotSend = 0
 local yRotSend = 270
 local zRotSend = 0
 local xRotRecall = 0
-local yRotRecall = -270
+local yRotRecall = 90
 local zRotRecall = 0
 
 local rackPosition = {x=-65,y=0.14,z=-21.50}
@@ -263,7 +262,6 @@ function checkLevel(index, modifier, evolving)
         itemZPos = itemZPos,
         pokemonXPos = pokemonXPos,
         pokemonZPos = pokemonZPos,
-        diceBagGUID = diceBagGUID,
         yRotRecall = yRotRecall,
         playerColour = playerColour,
         yLoc = yLoc,

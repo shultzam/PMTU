@@ -31,13 +31,9 @@ WILD = 3
 RIVAL = 4
 TITAN = 5
 
+-- Global constants representing Battle Arena side.
 ATTACKER = true
 DEFENDER = false
-
-local defenderConfirmed = false
-local attackerConfirmed = false
-
-local debug = false
 
 -- Pink, Green, Blue, Yellow, Red, Legendary, Beast.
 local deploy_pokeballs = { "9c4411", "c988ea", "2cf16d", "986cb5", "f66036", "e46f90", "1feef7" }
@@ -126,7 +122,7 @@ local atkText="a5671b"
 local defCounter="b76b2a"
 local defMoveText={"9e8ac1","68aee8", "8099cc", "145335"}
 local defText="e6c686"
-local roundText="0f03b4"  --[[ TODO: get the new GUID once this is applied to the mod save we are keeping. {-40.79, 0.97, 0.19}. Slightly thicker than the white bar. ]]
+local roundText="0f03b4"
 local arenaTextGUID="f0b393"
 local currRound = 0
 
@@ -141,6 +137,7 @@ local recallAtkPos = {x=13.50, z=2.47}
 local atkEvolve1Pos = {x=5.69, z=5.07}
 local atkEvolve2Pos = {x=8.90, z=5.07}
 local atkMoveZPos = 8.3
+local atkMoveDisableZPos = 7.8
 local atkConfirmPos = {x=7.29, z=11.87}
 
 -- Status card buttons.
@@ -162,6 +159,7 @@ local recallDefPos = {x=13.49, z=-2.47}
 local defEvolve1Pos = {x=5.69, z=-4.94}
 local defEvolve2Pos = {x=8.90, z=-4.94}
 local defMoveZPos = -8.85
+local defMoveDisableZPos = -9.35
 local defConfirmPos = {x=7.35, z=-11.74}
 
 -- Status card buttons.
@@ -192,11 +190,154 @@ local auto_roller_positions = {
   {-37, 1.45, 16}, {-35.5, 1.45, 16}, {-34, 1.45, 16}, {-32.5, 1.45, 16}
 }
 
-local simulatePos = {x=13.2, z=0.0}
+-- Button ids (creation order).
+local BUTTON_ID = {
+  -- Arena: Attacker controls.
+  atkFaint = "atkFaint",
+  atkMoves = "atkMoves",
+  atkRecall = "atkRecall",
+  atkLevelUp = "atkLevelUp",
+  atkLevelDown = "atkLevelDown",
+  atkStatusUp = "atkStatusUp",
+  atkStatusDown = "atkStatusDown",
+  atkEvo1 = "atkEvo1",
+  atkEvo2 = "atkEvo2",
+  atkMove1 = "atkMove1",
+  atkMove2 = "atkMove2",
+  atkMove3 = "atkMove3",
+  atkMove4 = "atkMove4",
+  atkMove1Disable = "atkMove1Disable",
+  atkMove2Disable = "atkMove2Disable",
+  atkMove3Disable = "atkMove3Disable",
+  atkMove4Disable = "atkMove4Disable",
+  atkRandomMove = "atkRandomMove",
+
+  -- Arena: Defender controls.
+  defFaint = "defFaint",
+  defMoves = "defMoves",
+  defRecall = "defRecall",
+  defLevelUp = "defLevelUp",
+  defLevelDown = "defLevelDown",
+  defStatusUp = "defStatusUp",
+  defStatusDown = "defStatusDown",
+  defEvo1 = "defEvo1",
+  defEvo2 = "defEvo2",
+  defMove1 = "defMove1",
+  defMove2 = "defMove2",
+  defMove3 = "defMove3",
+  defMove4 = "defMove4",
+  defMove1Disable = "defMove1Disable",
+  defMove2Disable = "defMove2Disable",
+  defMove3Disable = "defMove3Disable",
+  defMove4Disable = "defMove4Disable",
+  defRandomMove = "defRandomMove",
+
+  -- Multi-evolution selector buttons.
+  multiEvo1 = "multiEvo1",
+  multiEvo2 = "multiEvo2",
+  multiEvo3 = "multiEvo3",
+  multiEvo4 = "multiEvo4",
+  multiEvo5 = "multiEvo5",
+  multiEvo6 = "multiEvo6",
+  multiEvo7 = "multiEvo7",
+  multiEvo8 = "multiEvo8",
+  multiEvo9 = "multiEvo9",
+
+  -- Gym/Titan battle controls.
+  battleWild = "battleWild",
+  nextPokemon = "nextPokemon",
+
+  -- Tera controls + rival flip.
+  teraAttacker = "teraAttacker",
+  teraDefender = "teraDefender",
+  nextRival = "nextRival",
+
+  -- Auto roll controls.
+  autoRollAttacker = "autoRollAttacker",
+  autoRollAtkBlue = "autoRollAtkBlue",
+  autoRollAtkWhite = "autoRollAtkWhite",
+  autoRollAtkPurple = "autoRollAtkPurple",
+  autoRollAtkRed = "autoRollAtkRed",
+  autoRollDefender = "autoRollDefender",
+  autoRollDefBlue = "autoRollDefBlue",
+  autoRollDefWhite = "autoRollDefWhite",
+  autoRollDefPurple = "autoRollDefPurple",
+  autoRollDefRed = "autoRollDefRed",
+
+  -- Status buttons for attacker.
+  atkStatusCurse = "atkStatusCurse",
+  atkStatusBurn = "atkStatusBurn",
+  atkStatusPoison = "atkStatusPoison",
+  atkStatusSleep = "atkStatusSleep",
+  atkStatusParalysis = "atkStatusParalysis",
+  atkStatusFrozen = "atkStatusFrozen",
+  atkStatusConfuse = "atkStatusConfuse",
+
+  -- Status buttons for defender.
+  defStatusCurse = "defStatusCurse",
+  defStatusBurn = "defStatusBurn",
+  defStatusPoison = "defStatusPoison",
+  defStatusSleep = "defStatusSleep",
+  defStatusParalysis = "defStatusParalysis",
+  defStatusFrozen = "defStatusFrozen",
+  defStatusConfuse = "defStatusConfuse",
+}
+
+local buttonIndexById = {}
+
+-- Registers button.
+local function register_button(id)
+  local buttons = self.getButtons()
+  if not buttons or #buttons == 0 then
+    return
+  end
+
+  buttonIndexById[id] = buttons[#buttons].index
+end
+
+-- Creates button params supplies inputs.
+local function create_button(id, params)
+  self.createButton(params)
+  register_button(id)
+end
+
+-- Locates a button by label or click function.
+local function find_button(id)
+  local buttons = self.getButtons()
+  if not buttons then
+    return nil
+  end
+
+  for _, button in ipairs(buttons) do
+    if button.label == id or button.click_function == id then
+      return button
+    end
+  end
+
+  return nil
+end
+
+-- Edits button params supplies inputs.
+local function edit_button(id, params)
+  local button_index = buttonIndexById[id]
+  if not button_index then
+    local button = find_button(id)
+    if not button then
+      print("Button id not found: " .. tostring(id))
+      return
+    end
+
+    button_index = button.index
+    buttonIndexById[id] = button_index
+  end
+
+  params.index = button_index
+  self.editButton(params)
+end
 
 -- Table to track dice that need to be despawned.
-local atkSpawnedDiceTable = {}
-local defSpawnedDiceTable = {}
+ATK_SPAWNED_DICE_TABLE = {}
+DEF_SPAWNED_DICE_TABLE = {}
 
 -- Table to standardize the status strings.
 local status_ids = {
@@ -245,6 +386,23 @@ local status_ids = {
   the_self = "Self"
 }
 
+local status_bag_guid_by_status = {
+  [status_ids.burn] = statusGUID.burned,
+  [status_ids.paralyze] = statusGUID.paralyzed,
+  [status_ids.poison] = statusGUID.poisoned,
+  [status_ids.sleep] = statusGUID.sleep,
+  [status_ids.freeze] = statusGUID.frozen,
+  [status_ids.confuse] = statusGUID.confused,
+  [status_ids.curse] = statusGUID.cursed
+}
+
+local status_immunity_types = {
+  [status_ids.burn] = { Fire = true },
+  [status_ids.poison] = { Poison = true, Steel = true },
+  [status_ids.paralyze] = { Electric = true },
+  [status_ids.freeze] = { Ice = true }
+}
+
 -- Field effects or other arena specific items.
 -- This weird syntax is required because of how we are checking for Field Effects (lazily).
 local field_effect_ids = {
@@ -265,10 +423,6 @@ local field_effect_ids = {
   fieldClear = "FieldClear"             -- Whole arena.
 }
 
--- Field Effect positions.
-local atkFieldEffectPos = {-32.55, 0.96, -1.17}
-local defFieldEffectPos = {-32.55, 0.96, 1.17}
-
 -- Table to keep track of Field Effect tile GUIDs and which side. The first side is the front.
 local field_effect_tile_data = {
   ["490b0f"] = { effects = { field_effect_ids.safeguard, field_effect_ids.mist }, position = {-51, 1.31, 50} },
@@ -283,8 +437,6 @@ local field_effect_tile_data = {
   ["03704f"] = { effects = { field_effect_ids.toxicspikes, field_effect_ids.stealthrock }, position = {-51, 1.31, 42.5} }
 }
 
-local aiDifficulty = 0
-local scriptingEnabled = false
 local noMoveData = {name="NoMove", power=0, dice=6, status=DEFAULT}
 local wildPokemonGUID = nil
 local wildPokemonKanto = nil
@@ -299,7 +451,6 @@ local multiEvoGuids={}
 
 -- States.
 local inBattle = false
-local battleState = NO_BATTLE
 
 --Arena Positions
 local defenderPos = {pokemon={-36.01, 4.19}, dice={-36.03, 6.26}, status={-31.25, 4.44}, statusCounters={-31.25, 6.72}, item={-40.87, 4.26}, moveDice={-36.11, 8.66}, booster={-41.09, 13.40}, healthIndicator={-38, 1.06, 2.34}}
@@ -319,6 +470,7 @@ function initialize(params)
   orangeRack = params[6]
 end
 
+-- Event handler for save.
 function onSave()
   local save_table = {
     in_battle = inBattle,
@@ -332,6 +484,7 @@ function onSave()
   return JSON.encode(save_table)
 end
 
+-- Event handler for load.
 function onLoad(saved_data)
     -- Check if there is saved data.
     local save_table
@@ -355,84 +508,93 @@ function onLoad(saved_data)
       inBattle = false
     end
 
-    -- Create Arena Buttons
-    self.createButton({label="FAINT", click_function="recallAndFaintAttackerPokemon",function_owner=self, tooltip="Recall and Faint Pokémon",position={teamAtkPos.x, 1000, teamAtkPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="MOVES", click_function="seeMoveRules",function_owner=self, tooltip="Show Move Rules",position={movesAtkPos.x, 1000, movesAtkPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="RECALL", click_function="recallAtkArena",function_owner=self, tooltip="Recall Pokémon",position={recallAtkPos.x, 1000, recallAtkPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="+", click_function="increaseAtkArena",function_owner=self, tooltip="Increase Level",position={incLevelAtkPos.x, 1000, incLevelAtkPos.z}, height=300, width=240, font_size=200})
-    self.createButton({label="-", click_function="decreaseAtkArena",function_owner=self, tooltip="Decrease Level",position={decLevelAtkPos.x, 1000, decLevelAtkPos.z}, height=300, width=240, font_size=200})
-    self.createButton({label="+", click_function="addAtkStatus",function_owner=self, tooltip="Add Status Counter",position={incStatusAtkPos.x, 1000, incStatusAtkPos.z}, height=300, width=200, font_size=200})
-    self.createButton({label="-", click_function="removeAtkStatus",function_owner=self, tooltip="Remove Status Counter",position={decStatusAtkPos.x, 1000, decStatusAtkPos.z}, height=300, width=200, font_size=200})
-    self.createButton({label="E1", click_function="evolveAtk",function_owner=self, tooltip="Choose Evolution 1",position={-42.5, 1000, -0.33}, height=300, width=240, font_size=200})
-    self.createButton({label="E2", click_function="evolveTwoAtk",function_owner=self, tooltip="Choose Evolution 2",position={-45.15, 1000, -0.33}, height=300, width=240, font_size=200})
-    self.createButton({label="Move 1", click_function="attackMove1", function_owner=self, position={-45, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 2", click_function="attackMove2", function_owner=self, position={-40, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 3", click_function="attackMove3", function_owner=self, position={-35, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 4", click_function="attackMove4", function_owner=self, position={-30, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="CONFIRM", click_function="confirmAttack", function_owner=self, position={atkConfirmPos.x, 1000, atkConfirmPos.z}, height=300, width=1600, font_size=200})
+    buttonIndexById = {}
 
-    self.createButton({label="FAINT", click_function="recallAndFaintDefenderPokemon",function_owner=self, tooltip="Recall and Faint Pokémon",position={teamDefPos.x, 1000, teamDefPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="MOVES", click_function="seeMoveRules",function_owner=self, tooltip="Show Move Rules",position={movesDefPos.x, 1000, movesDefPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="RECALL", click_function="recallDefArena",function_owner=self, tooltip="Recall Pokémon",position={recallDefPos.x, 1000, recallDefPos.z}, height=300, width=720, font_size=200})
-    self.createButton({label="+", click_function="increaseDefArena",function_owner=self, tooltip="Increase Level",position={incLevelDefPos.x, 1000, incLevelDefPos.z}, height=300, width=240, font_size=200})
-    self.createButton({label="-", click_function="decreaseDefArena",function_owner=self, tooltip="Decrease Level",position={decLevelDefPos.x, 1000, decLevelDefPos.z}, height=300, width=240, font_size=200})
-    self.createButton({label="+", click_function="addDefStatus",function_owner=self, tooltip="Add Status Counter",position={incStatusDefPos.x, 1000, incStatusDefPos.z}, height=300, width=200, font_size=200})
-    self.createButton({label="-", click_function="removeDefStatus",function_owner=self, tooltip="Remove Status Counter",position={decStatusDefPos.x, 1000, decStatusDefPos.z}, height=300, width=200, font_size=200})
-    self.createButton({label="E1", click_function="evolveDef",function_owner=self, tooltip="Choose Evolution 1",position={-38, 1000, -7.19}, height=300, width=240, font_size=200})
-    self.createButton({label="E2", click_function="evolveTwoDef",function_owner=self, tooltip="Choose Evolution 2",position={-37, 1000, -7.19}, height=300, width=240, font_size=200})
-    self.createButton({label="Move 1", click_function="defenseMove1", function_owner=self, position={-45, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 2", click_function="defenseMove2", function_owner=self, position={-40, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 3", click_function="defenseMove3", function_owner=self, position={-35, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="Move 4", click_function="defenseMove4", function_owner=self, position={-30, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
-    self.createButton({label="CONFIRM", click_function="confirmDefense", function_owner=self, position={defConfirmPos.x, 1000, defConfirmPos.z}, height=300, width=1600, font_size=200})
+    -- Create Arena Buttons
+    create_button(BUTTON_ID.atkFaint, {label="FAINT", click_function="recallAndFaintAttackerPokemon",function_owner=self, tooltip="Recall and Faint Pokémon",position={teamAtkPos.x, 1000, teamAtkPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.atkMoves, {label="MOVES", click_function="seeMoveRules",function_owner=self, tooltip="Show Move Rules",position={movesAtkPos.x, 1000, movesAtkPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.atkRecall, {label="RECALL", click_function="recallAtkArena",function_owner=self, tooltip="Recall Pokémon",position={recallAtkPos.x, 1000, recallAtkPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.atkLevelUp, {label="+", click_function="increaseAtkArena",function_owner=self, tooltip="Increase Level",position={incLevelAtkPos.x, 1000, incLevelAtkPos.z}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.atkLevelDown, {label="-", click_function="decreaseAtkArena",function_owner=self, tooltip="Decrease Level",position={decLevelAtkPos.x, 1000, decLevelAtkPos.z}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.atkStatusUp, {label="+", click_function="addAtkStatus",function_owner=self, tooltip="Add Status Counter",position={incStatusAtkPos.x, 1000, incStatusAtkPos.z}, height=300, width=200, font_size=200})
+    create_button(BUTTON_ID.atkStatusDown, {label="-", click_function="removeAtkStatus",function_owner=self, tooltip="Remove Status Counter",position={decStatusAtkPos.x, 1000, decStatusAtkPos.z}, height=300, width=200, font_size=200})
+    create_button(BUTTON_ID.atkEvo1, {label="E1", click_function="evolveAtk",function_owner=self, tooltip="Choose Evolution 1",position={-42.5, 1000, -0.33}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.atkEvo2, {label="E2", click_function="evolveTwoAtk",function_owner=self, tooltip="Choose Evolution 2",position={-45.15, 1000, -0.33}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.atkMove1, {label="Move 1", click_function="attackMove1", function_owner=self, position={-45, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.atkMove2, {label="Move 2", click_function="attackMove2", function_owner=self, position={-40, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.atkMove3, {label="Move 3", click_function="attackMove3", function_owner=self, position={-35, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.atkMove4, {label="Move 4", click_function="attackMove4", function_owner=self, position={-30, 1000, atkMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.atkMove1Disable, {label="Disable", click_function="atkMove1Disable", function_owner=self, position={-30, 1000, atkMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.atkMove2Disable, {label="Disable", click_function="atkMove2Disable", function_owner=self, position={-30, 1000, atkMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.atkMove3Disable, {label="Disable", click_function="atkMove3Disable", function_owner=self, position={-30, 1000, atkMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.atkMove4Disable, {label="Disable", click_function="atkMove4Disable", function_owner=self, position={-30, 1000, atkMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.atkRandomMove, {label="RANDOM MOVE", click_function="randomAttackMove", function_owner=self, position={atkConfirmPos.x, 1000, atkConfirmPos.z}, height=300, width=1600, font_size=200})
+
+    create_button(BUTTON_ID.defFaint, {label="FAINT", click_function="recallAndFaintDefenderPokemon",function_owner=self, tooltip="Recall and Faint Pokémon",position={teamDefPos.x, 1000, teamDefPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.defMoves, {label="MOVES", click_function="seeMoveRules",function_owner=self, tooltip="Show Move Rules",position={movesDefPos.x, 1000, movesDefPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.defRecall, {label="RECALL", click_function="recallDefArena",function_owner=self, tooltip="Recall Pokémon",position={recallDefPos.x, 1000, recallDefPos.z}, height=300, width=720, font_size=200})
+    create_button(BUTTON_ID.defLevelUp, {label="+", click_function="increaseDefArena",function_owner=self, tooltip="Increase Level",position={incLevelDefPos.x, 1000, incLevelDefPos.z}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.defLevelDown, {label="-", click_function="decreaseDefArena",function_owner=self, tooltip="Decrease Level",position={decLevelDefPos.x, 1000, decLevelDefPos.z}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.defStatusUp, {label="+", click_function="addDefStatus",function_owner=self, tooltip="Add Status Counter",position={incStatusDefPos.x, 1000, incStatusDefPos.z}, height=300, width=200, font_size=200})
+    create_button(BUTTON_ID.defStatusDown, {label="-", click_function="removeDefStatus",function_owner=self, tooltip="Remove Status Counter",position={decStatusDefPos.x, 1000, decStatusDefPos.z}, height=300, width=200, font_size=200})
+    create_button(BUTTON_ID.defEvo1, {label="E1", click_function="evolveDef",function_owner=self, tooltip="Choose Evolution 1",position={-38, 1000, -7.19}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.defEvo2, {label="E2", click_function="evolveTwoDef",function_owner=self, tooltip="Choose Evolution 2",position={-37, 1000, -7.19}, height=300, width=240, font_size=200})
+    create_button(BUTTON_ID.defMove1, {label="Move 1", click_function="defenseMove1", function_owner=self, position={-45, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.defMove2, {label="Move 2", click_function="defenseMove2", function_owner=self, position={-40, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.defMove3, {label="Move 3", click_function="defenseMove3", function_owner=self, position={-35, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.defMove4, {label="Move 4", click_function="defenseMove4", function_owner=self, position={-30, 1000, defMoveZPos}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.defMove1Disable, {label="Disable", click_function="defMove1Disable", function_owner=self, position={-25, 1000, defMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.defMove2Disable, {label="Disable", click_function="defMove2Disable", function_owner=self, position={-20, 1000, defMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.defMove3Disable, {label="Disable", click_function="defMove3Disable", function_owner=self, position={-15, 1000, defMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.defMove4Disable, {label="Disable", click_function="defMove4Disable", function_owner=self, position={-10, 1000, defMoveDisableZPos}, height=200, width=1030, font_size=120})
+    create_button(BUTTON_ID.defRandomMove, {label="RANDOM MOVE", click_function="randomDefenseMove", function_owner=self, position={defConfirmPos.x, 1000, defConfirmPos.z}, height=300, width=1600, font_size=200})
 
     -- Multi Evolution Buttons
-    self.createButton({label="SELECT", click_function="multiEvo1", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo2", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo3", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo4", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo5", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo6", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo7", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo8", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
-    self.createButton({label="SELECT", click_function="multiEvo9", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo1, {label="SELECT", click_function="multiEvo1", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo2, {label="SELECT", click_function="multiEvo2", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo3, {label="SELECT", click_function="multiEvo3", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo4, {label="SELECT", click_function="multiEvo4", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo5, {label="SELECT", click_function="multiEvo5", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo6, {label="SELECT", click_function="multiEvo6", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo7, {label="SELECT", click_function="multiEvo7", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo8, {label="SELECT", click_function="multiEvo8", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
+    create_button(BUTTON_ID.multiEvo9, {label="SELECT", click_function="multiEvo9", function_owner=self, position={0, 1000, 0}, height=300, width=1000, font_size=200})
     
-    self.createButton({label="BATTLE", click_function="battleWildPokemon", function_owner=self, position={defConfirmPos.x, 1000, -6.2}, height=300, width=1600, font_size=200})
-    self.createButton({label="NEXT POKEMON", click_function="flipGymLeader", function_owner=self, position={3.5, 1000, -0.6}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.battleWild, {label="BATTLE", click_function="battleWildPokemon", function_owner=self, position={defConfirmPos.x, 1000, -6.2}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.nextPokemon, {label="NEXT POKEMON", click_function="flipGymLeader", function_owner=self, position={3.5, 1000, -0.6}, height=300, width=1600, font_size=200})
 
     -- Tera buttons.
-    self.createButton({label="", click_function="changeAttackerTeraType", function_owner=self, tooltip="Terastallize Attacker", position={3.5, 1000, -0.6}, height=300, width=2200, font_size=200})
-    self.createButton({label="", click_function="changeDefenderTeraType", function_owner=self, tooltip="Terastallize Defender", position={3.5, 1000, -0.6}, height=300, width=2200, font_size=200})
+    create_button(BUTTON_ID.teraAttacker, {label="", click_function="changeAttackerTeraType", function_owner=self, tooltip="Terastallize Attacker", position={3.5, 1000, -0.6}, height=300, width=2200, font_size=200})
+    create_button(BUTTON_ID.teraDefender, {label="", click_function="changeDefenderTeraType", function_owner=self, tooltip="Terastallize Defender", position={3.5, 1000, -0.6}, height=300, width=2200, font_size=200})
     -- Next Rival.
-    self.createButton({label="NEXT POKEMON", click_function="flipRivalPokemon", function_owner=self, position={3.5, 1000, -0.6}, height=300, width=1600, font_size=200})
+    create_button(BUTTON_ID.nextRival, {label="NEXT POKEMON", click_function="flipRivalPokemon", function_owner=self, position={3.5, 1000, -0.6}, height=300, width=1600, font_size=200})
     -- AutoRoller buttons.
-    self.createButton({label="Autoroll", click_function="autoRollAttacker", function_owner=self, tooltip="AutoRoll Attacker", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200})
-    self.createButton({label="0", click_function="adjustAtkDiceBlue", function_owner=self, tooltip="D8 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Blue"})
-    self.createButton({label="1", click_function="adjustAtkDiceWhite", function_owner=self, tooltip="D6 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="White"})
-    self.createButton({label="0", click_function="adjustAtkDicePurple", function_owner=self, tooltip="D4 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Purple"})
-    self.createButton({label="Effect Roll", click_function="rollAtkEffectDie", function_owner=self, tooltip="Roll One Effect Die", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200, color="Red"})
-    self.createButton({label="Autoroll", click_function="autoRollDefender", function_owner=self, tooltip="AutoRoll Defender", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200})
-    self.createButton({label="0", click_function="adjustDefDiceBlue", function_owner=self, tooltip="D8 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Blue"})
-    self.createButton({label="1", click_function="adjustDefDiceWhite", function_owner=self, tooltip="D6 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="White"})
-    self.createButton({label="0", click_function="adjustDefDicePurple", function_owner=self, tooltip="D4 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Purple"})
-    self.createButton({label="Effect Roll", click_function="rollDefEffectDie", function_owner=self, tooltip="Roll One Effect Die", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200, color="Red"})
-    self.createButton({label="Simulate", click_function="simulateRound", function_owner=self, tooltip="Simulate Battle Round", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200})
+    create_button(BUTTON_ID.autoRollAttacker, {label="Autoroll", click_function="autoRollAttacker", function_owner=self, tooltip="AutoRoll Attacker", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200})
+    create_button(BUTTON_ID.autoRollAtkBlue, {label="0", click_function="adjustAtkDiceBlue", function_owner=self, tooltip="D8 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Blue"})
+    create_button(BUTTON_ID.autoRollAtkWhite, {label="1", click_function="adjustAtkDiceWhite", function_owner=self, tooltip="D6 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="White"})
+    create_button(BUTTON_ID.autoRollAtkPurple, {label="0", click_function="adjustAtkDicePurple", function_owner=self, tooltip="D4 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Purple"})
+    create_button(BUTTON_ID.autoRollAtkRed, {label="Effect Roll", click_function="rollAtkEffectDie", function_owner=self, tooltip="Roll One Effect Die", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200, color="Red"})
+    create_button(BUTTON_ID.autoRollDefender, {label="Autoroll", click_function="autoRollDefender", function_owner=self, tooltip="AutoRoll Defender", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200})
+    create_button(BUTTON_ID.autoRollDefBlue, {label="0", click_function="adjustDefDiceBlue", function_owner=self, tooltip="D8 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Blue"})
+    create_button(BUTTON_ID.autoRollDefWhite, {label="1", click_function="adjustDefDiceWhite", function_owner=self, tooltip="D6 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="White"})
+    create_button(BUTTON_ID.autoRollDefPurple, {label="0", click_function="adjustDefDicePurple", function_owner=self, tooltip="D4 Dice", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color="Purple"})
+    create_button(BUTTON_ID.autoRollDefRed, {label="Effect Roll", click_function="rollDefEffectDie", function_owner=self, tooltip="Roll One Effect Die", position={3.5, 1000, -0.6}, height=300, width=1200, font_size=200, color="Red"})
     -- Attacker status buttons.
-    self.createButton({label="CRS", click_function="applyCursedAttacker", function_owner=self, tooltip="Apply Cursed Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
-    self.createButton({label="BRN", click_function="applyBurnedAttacker", function_owner=self, tooltip="Apply Burned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
-    self.createButton({label="PSN", click_function="applyPoisonedAttacker", function_owner=self, tooltip="Apply Poisoned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
-    self.createButton({label="SLP", click_function="applySleepAttacker", function_owner=self, tooltip="Apply Sleep Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
-    self.createButton({label="PAR", click_function="applyParalyzedAttacker", function_owner=self, tooltip="Apply Paralysis Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
-    self.createButton({label="FRZ", click_function="applyFrozenAttacker", function_owner=self, tooltip="Apply Frozen Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
-    self.createButton({label="CNF", click_function="applyConfusionAttacker", function_owner=self, tooltip="Apply Confusion Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.atkStatusCurse, {label="CRS", click_function="applyCursedAttacker", function_owner=self, tooltip="Apply Cursed Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
+    create_button(BUTTON_ID.atkStatusBurn, {label="BRN", click_function="applyBurnedAttacker", function_owner=self, tooltip="Apply Burned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
+    create_button(BUTTON_ID.atkStatusPoison, {label="PSN", click_function="applyPoisonedAttacker", function_owner=self, tooltip="Apply Poisoned Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.atkStatusSleep, {label="SLP", click_function="applySleepAttacker", function_owner=self, tooltip="Apply Sleep Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.atkStatusParalysis, {label="PAR", click_function="applyParalyzedAttacker", function_owner=self, tooltip="Apply Paralysis Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
+    create_button(BUTTON_ID.atkStatusFrozen, {label="FRZ", click_function="applyFrozenAttacker", function_owner=self, tooltip="Apply Frozen Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
+    create_button(BUTTON_ID.atkStatusConfuse, {label="CNF", click_function="applyConfusionAttacker", function_owner=self, tooltip="Apply Confusion Status to Attacker", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
     -- Defender status buttons.
-    self.createButton({label="CRS", click_function="applyCursedDefender", function_owner=self, tooltip="Apply Cursed Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
-    self.createButton({label="BRN", click_function="applyBurnedDefender", function_owner=self, tooltip="Apply Burned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
-    self.createButton({label="PSN", click_function="applyPoisonedDefender", function_owner=self, tooltip="Apply Poisoned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
-    self.createButton({label="SLP", click_function="applySleepDefender", function_owner=self, tooltip="Apply Sleep Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
-    self.createButton({label="PAR", click_function="applyParalyzedDefender", function_owner=self, tooltip="Apply Paralysis Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
-    self.createButton({label="FRZ", click_function="applyFrozenDefender", function_owner=self, tooltip="Apply Frozen Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
-    self.createButton({label="CNF", click_function="applyConfusionDefender", function_owner=self, tooltip="Apply Confusion Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.defStatusCurse, {label="CRS", click_function="applyCursedDefender", function_owner=self, tooltip="Apply Cursed Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={106/255, 102/255, 187/255}})
+    create_button(BUTTON_ID.defStatusBurn, {label="BRN", click_function="applyBurnedDefender", function_owner=self, tooltip="Apply Burned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 68/255, 34/255}})
+    create_button(BUTTON_ID.defStatusPoison, {label="PSN", click_function="applyPoisonedDefender", function_owner=self, tooltip="Apply Poisoned Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={170/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.defStatusSleep, {label="SLP", click_function="applySleepDefender", function_owner=self, tooltip="Apply Sleep Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
+    create_button(BUTTON_ID.defStatusParalysis, {label="PAR", click_function="applyParalyzedDefender", function_owner=self, tooltip="Apply Paralysis Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 204/255, 51/255}})
+    create_button(BUTTON_ID.defStatusFrozen, {label="FRZ", click_function="applyFrozenDefender", function_owner=self, tooltip="Apply Frozen Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={102/255, 204/255, 255/255}})
+    create_button(BUTTON_ID.defStatusConfuse, {label="CNF", click_function="applyConfusionDefender", function_owner=self, tooltip="Apply Confusion Status to Defender", position={3.5, 1000, -0.6}, height=300, width=400, font_size=200, color={255/255, 85/255, 153/255}})
 
     -- Check if we are in battle.
     if inBattle then
@@ -444,13 +606,12 @@ function onLoad(saved_data)
       clearMoveText(DEFENDER)
       
       -- Mass clear of buttons and labels.
-      hideConfirmButton(DEFENDER)
+      hideRandomMoveButton(DEFENDER)
       showFlipRivalButton(false)
-      self.editButton({index=37, label="BATTLE"})
+      edit_button(BUTTON_ID.battleWild, { label="BATTLE"})
       showWildPokemonButton(false)
       showFlipGymButton(false)
-      hideConfirmButton(ATTACKER)
-      setBattleState(NO_BATTLE)
+      hideRandomMoveButton(ATTACKER)
       showAtkButtons(false)
       showDefButtons(false)
       showAutoRollButtons(false)
@@ -480,6 +641,7 @@ function isBattleInProgress()
   return attackerData.type ~= nil or defenderData.type ~= nil
 end
 
+-- Returns attacker type.
 function getAttackerType()
   if attackerData == nil or attackerData.type == nil then
     return nil
@@ -488,6 +650,7 @@ function getAttackerType()
   return attackerData.type
 end
 
+-- Returns defender type.
 function getDefenderType()
   if defenderData == nil or defenderData.type == nil then
     return nil
@@ -511,6 +674,7 @@ function createAttackerTeraLabel()
   return label
 end
 
+-- Handles change attacker tera type.
 function changeAttackerTeraType()
   if attackerPokemon.teraType == nil or attackerPokemon.types == nil then
     print("Cannot Terastallize the attacker without a Tera card!")
@@ -529,12 +693,14 @@ function changeAttackerTeraType()
   showAttackerTeraButton(true, label)
 end
 
+-- Shows attacker tera button.
 function showAttackerTeraButton(visible, type_label)
   local yPos = visible and 0.5 or 1000
   local label = type_label and "Current: " .. type_label or ""
-  self.editButton({index=39, label=label, position={2.6, yPos, 0.6}})
+  edit_button(BUTTON_ID.teraAttacker, { label=label, position={2.6, yPos, 0.6}})
 end
 
+-- Creates defender tera label.
 function createDefenderTeraLabel()
   local label = defenderPokemon.types[1]
   if defenderPokemon.teraActive then
@@ -545,6 +711,7 @@ function createDefenderTeraLabel()
   return label
 end
 
+-- Handles change defender tera type.
 function changeDefenderTeraType()
   if defenderPokemon.teraType == nil or defenderPokemon.types == nil then
     print("Cannot Terastallize the defender without a Tera card!")
@@ -563,10 +730,11 @@ function changeDefenderTeraType()
   showDefenderTeraButton(true, label)
 end
 
+-- Shows defender tera button.
 function showDefenderTeraButton(visible, type_label)
   local yPos = visible and 0.5 or 1000
   local label = type_label and "Current: " .. type_label or ""
-  self.editButton({index=40, label=label, position={2.6, yPos, -0.6}})
+  edit_button(BUTTON_ID.teraDefender, { label=label, position={2.6, yPos, -0.6}})
 end
 
 --------------------------
@@ -584,21 +752,6 @@ function flipGymLeader()
   if defenderData.boosterGuid ~= nil then
     discardBooster(DEFENDER)
     defenderPokemon.teraActive = false
-  end
-
-  -- Check if this Gym Leader gets a booster.
-  local booster_chance = Global.call("getBoostersChance")
-  if math.random(1,100) > (100 - booster_chance) then
-    getBooster(DEFENDER, nil)
-  end
-
-  -- Check if we have a TM booster.
-  local cardMoveData = nil
-  if defenderData.tmCard then
-    local cardObject = getObjectFromGUID(defenderData.boosterGuid)
-    if cardObject then
-      cardMoveData = copyTable(Global.call("GetMoveDataByName", cardObject.getName()))
-    end
   end
 
   -- Reformat the data so that the model code can use it. (Sorry, I know this is hideous.) This is extra gross because
@@ -626,6 +779,23 @@ function flipGymLeader()
 
   -- Update pokemon and arena info
   setNewPokemon(defenderPokemon, defenderPokemon.pokemon2, defenderPokemon.pokemonGUID)
+
+  -- Check if this Gym Leader gets a booster.
+  local booster_chance = Global.call("getBoostersChance")
+  if math.random(1,100) > (100 - booster_chance) then
+    getBooster(DEFENDER, nil)
+  end
+
+  -- Check if we have a TM booster.
+  local cardMoveData = nil
+  if defenderData.tmCard then
+    local cardObject = getObjectFromGUID(defenderData.boosterGuid)
+    if cardObject then
+      cardMoveData = copyTable(Global.call("GetMoveDataByName", cardObject.getName()))
+    end
+  end
+
+  -- Update the moves.
   updateMoves(DEFENDER, defenderPokemon, cardMoveData)
   showFlipGymButton(false)
 
@@ -760,26 +930,15 @@ function flipGymLeader()
     end
   end
 
-  -- Detect status cards and tokens. Gym Leaders can delete them.
-  local status_table = detectStatusCardAndTokens(DEFENDER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  -- Delete any status cards or status tokens.
+  removeStatusAndTokens(DEFENDER)
 
   -- Clear texts.
   clearMoveText(ATTACKER)
   clearMoveText(DEFENDER)
 end
 
+-- Flips rival pokemon.
 function flipRivalPokemon()
   if attackerData.type ~= RIVAL then
     return
@@ -993,6 +1152,7 @@ function moveAndBattleWildPokemon(params)
   )
 end
 
+-- Runs wild pokemon.
 function battleWildPokemon(wild_battle_params, is_automated)
   -- Check if in a battle.
   if inBattle == false then
@@ -1039,26 +1199,16 @@ function battleWildPokemon(wild_battle_params, is_automated)
     defenderData.attackValue.level = defenderPokemon.baseLevel
     updateAttackValueCounter(DEFENDER)
 
-    aiDifficulty = Global.call("GetAIDifficulty")
-
-    if scriptingEnabled then
-      showWildPokemonButton(false)
-      defenderConfirmed = true
-      if attackerConfirmed then
-        startBattle()
-      end
-    else
-      local numMoves = #defenderPokemon.moves
-      if numMoves > 1 then
-        showConfirmButton(DEFENDER, "RANDOM MOVE")
-      end
-      self.editButton({index=37, label="END BATTLE"})
-      showAutoRollButtons(true)
-      moveStatusButtons(true)
+    local numMoves = #defenderPokemon.moves
+    if numMoves > 1 then
+      showRandomMoveButton(DEFENDER)
     end
+    edit_button(BUTTON_ID.battleWild, { label="END BATTLE"})
+    showAutoRollButtons(true)
+    moveStatusButtons(true)
     
     -- Create a button that allows someone to click it to catch the wild Pokemon.
-    self.editButton({index=14, position={teamDefPos.x, 0.4, teamDefPos.z}, click_function="wildPokemonCatch", label="CATCH", tooltip="Catch Pokemon"})
+    edit_button(BUTTON_ID.defFaint, { position={teamDefPos.x, 0.4, teamDefPos.z}, click_function="wildPokemonCatch", label="CATCH", tooltip="Catch Pokemon"})
 
     -- Check if this is an automated Wild Battle.
     -- NOTE: When using the BATTLE button manually this field is not empty since we are using
@@ -1069,7 +1219,7 @@ function battleWildPokemon(wild_battle_params, is_automated)
       if wild_battle_params.position then
         -- Valid position received.
         wildPokemonKanto = wild_battle_params.position
-        self.editButton({index=15, position={movesDefPos.x, 0.4, movesDefPos.z}, click_function="wildPokemonFlee", label="FLEE", tooltip="Wild Pokemon Flees"})
+        edit_button(BUTTON_ID.defMoves, { position={movesDefPos.x, 0.4, movesDefPos.z}, click_function="wildPokemonFlee", label="FLEE", tooltip="Wild Pokemon Flees"})
       else
         print("Invalid Recall color given to battleWildPokemon: " .. tostring(wild_battle_params.color_index))
       end
@@ -1079,7 +1229,7 @@ function battleWildPokemon(wild_battle_params, is_automated)
         if wild_battle_params.color_index > 0 and wild_battle_params.color_index < 8 then
           -- Valid color_index received.
           wildPokemonColorIndex = wild_battle_params.color_index
-          self.editButton({index=16, position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="wildPokemonFaint", label="FAINT", tooltip="Wild Pokemon Faints"})
+          edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="wildPokemonFaint", label="FAINT", tooltip="Wild Pokemon Faints"})
         else
           print("Invalid Faint color given to battleWildPokemon: " .. tostring(wild_battle_params.color_index))
         end
@@ -1101,7 +1251,7 @@ function battleWildPokemon(wild_battle_params, is_automated)
     inBattle = false
     text = getObjectFromGUID(defText)
     text.setValue(" ")
-    hideConfirmButton(DEFENDER)
+    hideRandomMoveButton(DEFENDER)
 
     showAutoRollButtons(false)
     moveStatusButtons(false)
@@ -1114,7 +1264,7 @@ function battleWildPokemon(wild_battle_params, is_automated)
 
     clearPokemonData(DEFENDER)
     clearTrainerData(DEFENDER)
-    self.editButton({index=37, label="BATTLE"})
+    edit_button(BUTTON_ID.battleWild, { label="BATTLE"})
 
     Global.call("PlayRouteMusic",{})
 
@@ -1127,9 +1277,9 @@ function battleWildPokemon(wild_battle_params, is_automated)
     showDefStatusButtons(false)
     
     -- Reset the buttons.
-    self.editButton({index=14, position={teamDefPos.x, 1000, teamDefPos.z}, click_function="recallAndFaintDefenderPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
-    self.editButton({index=15, position={movesDefPos.x, 1000, movesDefPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
-    self.editButton({index=16, position={recallDefPos.x, 1000, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
+    edit_button(BUTTON_ID.defFaint, { position={teamDefPos.x, 1000, teamDefPos.z}, click_function="recallAndFaintDefenderPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
+    edit_button(BUTTON_ID.defMoves, { position={movesDefPos.x, 1000, movesDefPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
+    edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, 1000, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
   end
 end
 
@@ -1290,25 +1440,14 @@ function wildPokemonCatch(obj, player_color)
   end
 end
 
+-- Handles wild pokemon flee.
 function wildPokemonFlee()
   -- First, save off the wild Pokemon's GUID and kanto location.
   local wild_chip_guid = wildPokemonGUID
   local kanto_location = wildPokemonKanto
 
-  -- Detect status cards and tokens. Trainers can delete them.
-  local status_table = detectStatusCardAndTokens(DEFENDER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  -- Detect status cards and tokens. Wilds can delete them.
+  removeStatusAndTokens(DEFENDER)
 
   -- Next, end the battle.
   battleWildPokemon()
@@ -1350,25 +1489,14 @@ function wildPokemonFlee()
   end
 end
 
+-- Handles wild pokemon faint.
 function wildPokemonFaint()
   -- First, save off the wild Pokemon's GUID and color index.
   local wild_chip_guid = wildPokemonGUID
   local color_index = wildPokemonColorIndex
 
-  -- Detect status cards and tokens. Trainers can delete them.
-  local status_table = detectStatusCardAndTokens(DEFENDER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  -- Detect status cards and tokens. Wilds can delete them.
+  removeStatusAndTokens(DEFENDER)
 
   -- Next, end the battle.
   battleWildPokemon()
@@ -1406,236 +1534,7 @@ function wildPokemonFaint()
   end
 end
 
---------------------------
--- "AI" Functions
---------------------------
-
-function setScriptingEnabled(enabled)
-  scriptingEnabled = enabled
-end
-
-function setBattleState(state)
-  local arenaText = getObjectFromGUID(arenaTextGUID)
-  battleState = state
-  if battleState == SELECT_MOVE then
-    arenaText.TextTool.setValue("SELECT MOVE")
-  elseif battleState == ROLL_EFFECTS then
-    arenaText.TextTool.setValue("ROLL EFFECTS")
-  elseif battleState == ROLL_ATTACK then
-    arenaText.TextTool.setValue("ROLL ATTACK")
-  elseif battleState == PRE_MOVE_RESOLVE_STATUS or battleState == RESOLVE_STATUS then
-    arenaText.TextTool.setValue("RESOLVE STATUS")
-  elseif battleState == SELECT_POKEMON then
-    arenaText.TextTool.setValue("SELECT POKEMON")
-  elseif battleState == NO_BATTLE then
-    arenaText.TextTool.setValue("ARENA")
-  end
-end
-
-function confirmAttack()
-
-  if scriptingEnabled == false then
-    selectRandomMove(ATTACKER)
-    return
-  end
-
-  attackerConfirmed = true
-  hideConfirmButton(ATTACKER)
-  if defenderConfirmed then
-    if battleState == NO_BATTLE then
-      startBattle()
-    elseif battleState == SELECT_POKEMON then
-      if attackerPokemon == nil then
-        forfeit(ATTACKER)
-      else
-        resolvePokemon()
-      end
-    elseif battleState == ROLL_EFFECTS then
-      resolveEffects()
-    elseif battleState == PRE_MOVE_RESOLVE_STATUS or battleState == RESOLVE_STATUS then
-      resolveStatuses()
-    elseif battleState == ROLL_ATTACK then
-      resolveAttacks()
-    end
-  end
-end
-
-
-function confirmDefense()
-
-  if scriptingEnabled == false then
-    selectRandomMove(DEFENDER)
-    return
-  end
-
-  defenderConfirmed = true
-  hideConfirmButton(DEFENDER)
-  if attackerConfirmed then
-    if battleState == NO_BATTLE then
-      startBattle()
-    elseif battleState == SELECT_POKEMON then
-      if defenderPokemon == nil then
-        forfeit(DEFENDER)
-      else
-        resolvePokemon()
-      end
-    elseif battleState == ROLL_EFFECTS then
-      resolveEffects()
-    elseif battleState == PRE_MOVE_RESOLVE_STATUS or battleState == RESOLVE_STATUS then
-      resolveStatuses()
-    elseif battleState == ROLL_ATTACK then
-      resolveAttacks()
-    end
-  end
-end
-
-function selectRandomMove(isAttacker)
-
-  local data = isAttacker and attackerData or defenderData
-
-  if data.type == GYM then
-    move = math.random(1,3)
-  elseif data.type == TRAINER or data.type == WILD or data.type == RIVAL then
-    move = math.random(1,2)
-  end
-
-  selectMove(move, isAttacker, true)
-end
-
-function startBattle()
-
-  setBattleState(SELECT_MOVE)
-  if defenderType ~= GYM and defenderType ~= WILD and attackerType ~= TRAINER then
-    inBattle = true
-    Global.call("PlayTrainerBattleMusic",{})
-  end
-
-  resolvePokemon()
-end
-
-function forfeit(isAttacker)
-
-  local data = isAttacker and attackerData or defenderData
-  printToAll(Player[data.playerColor].steam_name .. " forfeitted the battle!")
-
-  if isAttacker then
-    if defenderData.type == GYM then
-      local gym = getObjectFromGUID(defenderData.gymGUID)
-      gym.call("recall");
-    elseif defenderData.type == WILD then
-      defenderData.wildPokemonGUID = nil
-    end
-  else
-    if attackerData.type == TRAINER then
-      local pokeball = getObjectFromGUID(attackerData.pokeballGUID)
-      pokeball.call("recall")
-    end
-  end
-
-  endBattle()
-end
-
-
-function resolvePokemon()
-
-  setRound(currRound + 1)
-  updateStatus(ATTACKER, attackerData.status)
-  updateStatus(DEFENDER, defenderData.status)
-
-  local rollEffects = false
-  local attackerStatus = attackerData.status
-  if attackerStatus ~= nil then
-    if attackerStatus == status_ids.paralyze or attackerStatus == status_ids.freeze then
-      rollEffects = true
-      spawnStatusDice(ATTACKER)
-      showConfirmButton(ATTACKER, "CONFIRM")
-    end
-  else
-    attackerConfirmed = true
-  end
-  local defenderStatus = defenderData.status
-  if defenderStatus ~= nil then
-    if defenderStatus == status_ids.paralyze or defenderStatus == status_ids.freeze then
-      rollEffects = true
-      spawnStatusDice(DEFENDER)
-      showConfirmButton(DEFENDER, "CONFIRM")
-    end
-  else
-    defenderConfirmed = true
-  end
-
-  if rollEffects then
-    setBattleState(PRE_MOVE_RESOLVE_STATUS)
-    hideArenaMoveButtons(ATTACKER)
-    hideArenaMoveButtons(DEFENDER)
-  else
-
-    attackerConfirmed = not attackerData.canSelectMove
-    defenderConfirmed = not defenderData.canSelectMove
-    setBattleState(SELECT_MOVE)
-    updateTypeEffectiveness()
-  end
-
-end
-
-function resolveStatuses()
-
-  if #attackerDice > 0 then
-    resolveStatus(ATTACKER, attackerDice[1])
-  end
-  if #defenderDice > 0 then
-    resolveStatus(DEFENDER, defenderDice[1])
-  end
-
-  clearDice(ATTACKER)
-  clearDice(DEFENDER)
-
-  if battleState == PRE_MOVE_RESOLVE_STATUS then
-
-    showMoveButtons(ATTACKER)
-    showMoveButtons(DEFENDER)
-    attackerConfirmed = not attackerData.canSelectMove
-    defenderConfirmed = not defenderData.canSelectMove
-    setBattleState(SELECT_MOVE)
-    updateTypeEffectiveness()
-
-  else
-
-    setBattleState(ROLL_ATTACK)
-
-    spawnDice(attackerData.selectedMoveData, ATTACKER, attackerPokemon.effects)
-    spawnDice(defenderData.selectedMoveData, DEFENDER, defenderPokemon.effects)
-
-    showConfirmButton(ATTACKER, "CONFIRM")
-    showConfirmButton(DEFENDER, "CONFIRM")
-
-  end
-end
-
-function resolveStatus(isAttacker, diceGUID)
-
-  local data = isAttacker and attackerData or defenderData
-  local dice = getObjectFromGUID(diceGUID)
-  local diceValue = dice.getValue()
-  local statusCard = getObjectFromGUID(data.statusGUID)
-  if data.status == status_ids.paralyze then
-    if diceValue == 1 then
-      statusCard.flip()
-      clearMoveData(isAttacker, "'s fully paralyzed!")
-    end
-  elseif data.status == status_ids.sleep then
-    clearMoveData(isAttacker, " is fast asleep!")
-    addStatusCounters(isAttacker, diceValue)
-    statusCard.flip()
-  elseif data.status == status_ids.freeze then
-      if diceValue == 4 then
-        removeStatus(data)
-      else
-        clearMoveData(isAttacker, " is frozen solid!")
-      end
-  end
-end
-
+-- Clears move data isAttacker selects attacker/defender.
 function clearMoveData(isAttacker, reason)
 
   if isAttacker then
@@ -1669,359 +1568,89 @@ function clearMoveData(isAttacker, reason)
   end
 end
 
-function resolveAttacks()
-
-  calculateAttackRoll(ATTACKER)
-  calculateAttackRoll(DEFENDER)
-
-  calculateFinalAttack(ATTACKER)
-  calculateFinalAttack(DEFENDER)
-
-  if attackerData.attackValue.total == defenderData.attackValue.total then
-
-    printToAll("Draw. Re-roll attack dice.")
-    showConfirmButton(ATTACKER, "CONFIRM")
-    showConfirmButton(DEFENDER, "CONFIRM")
-  else
-
-    resolveRound()
-  end
-
-end
-
-function calculateAttackRoll(isAttacker)
-
-  if isAttacker then
-    data = attackerData
-    pokemonData = attackerPokemon
-  else
-    data = defenderData
-    pokemonData = defenderPokemon
-  end
-
-  -- Add dice values into a table
-  local attackRoll = 0
-  local roll = {}
-  local die
-  for i=1, #data.dice do
-    die = getObjectFromGUID(data.dice[i])
-    table.insert(roll, die.getValue())
-  end
-
-  if data.diceMod ~= 0 then
-    table.sort(roll)
-    if diceMod > 0 then -- Remove lowest X rolls
-      for i=1, diceMod do
-        table.remove(roll, 1)
-      end
-    elseif diceMod < 0 then -- Remove highest X rolls
-      for i=math.abs(diceMod), 1, -1 do
-        table.remove(roll, #roll)
-      end
-    end
-  end
-
-  for i=1, #roll do
-    attackRoll = attackRoll + roll[i]
-  end
-
-  -- If the attack roll is odd, add the move's strength to the opponent's move's strength
-  if pokemonData.status ~= nil and pokemonData.status == status_ids.confuse then
-    if attackRoll%2 ~= 0 then
-      if isAttacker then
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + attackerData.attackValue.movePower
-      else
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + defenderData.attackValue.movePower
-      end
-    end
-  end
-
-  data.attackValue.attackRoll = attackRoll
-end
-
-function calculateFinalAttack(isAttacker)
-  if isAttacker then
-    data = attackerData
-    pokemonData = attackerPokemon
-  else
-    data = defenderData
-    pokemonData = defenderPokemon
-  end
-
-  local attackValue = data.attackValue
-  local totalAttack = attackValue.attackRoll + attackValue.level + attackValue.movePower + attackValue.effectiveness + attackValue.item
-  attackValue.total = totalAttack
-
-  printToAll(pokemonData.name .. " hits for " .. totalAttack .. " Attack!")
-  local calcString = attackValue.attackRoll .. " + " .. attackValue.level .. " (lvl) + " .. attackValue.movePower .. " (move)"
-
-  if attackValue.effectiveness ~= 0 then
-    if attackValue.effectiveness > 0 then
-      calcString = calcString .. " + " .. attackValue.effectiveness .. " (effective)"
-    else
-      local abs = math.abs(attackValue.effectiveness)
-      calcString = calcString .. " - " .. abs .. " (weak)"
-    end
-  end
-  if attackValue.item ~= 0 then
-      calcString = calcString .. " + " .. attackValue.item  .. " (item)"
-  end
-
-  printToAll(calcString)
-
-  updateAttackValueCounter(isAttacker)
-end
-
-
-function resolveRound()
-
-  setBattleState(RESOLVE)
-
-  -- Clear the text fields.
-  clearMoveText(ATTACKER)
-  clearMoveText(DEFENDER)
-
-  local attackerWon = attackerData.attackValue.total > defenderData.attackValue.total
-
-  if attackerWon then
-    if attackerData.type == PLAYER then
-      playerWon(ATTACKER)
-    elseif attackerData.type == TRAINER then
-      trainerWon()
-    end
-    if defenderData.type == GYM then
-      gymLost()
-    elseif defenderData.type == WILD then
-      wildPokemonLost()
-    elseif defenderData.type == PLAYER then
-      playerLost(DEFENDER)
-    end
-  else
-    if defenderData.type == PLAYER then
-      playerWon(DEFENDER)
-    elseif defenderData.type == GYM then
-      gymWon()
-    elseif defenderData.type == WILD then
-      wildPokemonWon()
-    end
-    if attackerData.type == PLAYER then
-      playerLost(ATTACKER)
-    elseif attackerData.type == TRAINER then
-      trainerLost()
-    end
-  end
-
-  resetTrainerData(ATTACKER)
-  resetTrainerData(DEFENDER)
-
-  clearDice(ATTACKER)
-  clearDice(DEFENDER)
-
-  if battleState ~= NO_BATTLE then
-    setBattleState(SELECT_POKEMON)
-    if attackerData.type == PLAYER then
-      showConfirmButton(ATTACKER, "CONFIRM")
-    end
-    if defenderData.type == PLAYER then
-      showConfirmButton(DEFENDER, "CONFIRM")
-    end
-  end
-end
-
-
-function playerWon(isAttacker)
-
-  if isAttacker then
-    data = attackerData
-    pokemonData = attackerPokemon
-  else
-    data = defenderData
-    pokemonData = defenderPokemon
-  end
-
-  showMoveButtons(isAttacker)
-
-  local pokemonFainted = false
-  local effects = pokemonData.effects
-  for i=1, #effects do
-    if effects[i] == status_ids.ko then
-      printToAll(pokemonData.name .. " faints from Recoil")
-      pokemonFaint(isAttacker, pokemonData)
-      pokemonFainted = true
-    end
-  end
-  if pokemonFainted == false then
-    updateStatus(isAttacker, pokemonData.status)
-  end
-end
-
-function playerLost(isAttacker)
-
-  if isAttacker then
-    data = attackerPokemon
-  else
-    data = defenderPokemon
-  end
-
-  printToAll(data.name .. " fainted!")
-  pokemonFaint(isAttacker, data)
-end
-
-
-function gymWon()
-
-  showMoveButtons(DEFENDER)
-
-  local pokemonFainted = false
-  for i=1, #defenderPokemon.effects do
-    if defenderPokemon.effects[i] == status_ids.ko then
-      printToAll(defenderPokemon.name .. " faints from Recoil")
-      gymLost()
-      pokemonFainted = true
-    end
-  end
-  if pokemonFainted == false then
-
-    updateStatus(DEFENDER, defenderData.status)
-  end
-
-end
-
-function gymLost()
-
-  if defenderPokemon.name == defenderData.pokemon[2].name then
-    printToAll(Player[attackerData.playerColor].steam_name .. " defeated " .. defenderData.trainerName)
-    local gym = getObjectFromGUID(defenderData.gymGUID)
-    gym.call("recall");
-  else
-    defenderPokemon = defenderData.pokemon[2]
-    local gymCard = getObjectFromGUID(defenderData.guid)
-    gymCard.flip()
-    defenderData.attackValue.level = defenderPokemon.baseLevel
-
-    updateMoves(DEFENDER, defenderPokemon)
-  end
-end
-
-
-function trainerWon()
-
-  showMoveButtons(ATTACKER)
-
-  local pokemonFainted = false
-  for i=1, #attackerPokemon.effects do
-    if attackerPokemon.effects[i] == status_ids.ko then
-      printToAll(attackerPokemon.name .. " faints from Recoil")
-      trainerLost()
-      pokemonFainted = true
-    end
-  end
-  if pokemonFainted == false then
-
-    updateStatus(ATTACKER, attackerData.status)
-  end
-end
-
-function trainerLost()
-
-  printToAll(Player[defendPlayer.playerColor].steam_name .. " defeated Trainer")
-  local pokeball = getObjectFromGUID(attackerData.pokeballGUID)
-  pokeball.call("recall")
-end
-
-
-function wildPokemonWon()
-
-  for i=1, #defenderPokemon.effects do
-    if defenderPokemon.effects[i] == status_ids.ko then
-      printToAll(defenderPokemon.name .. " faints from Recoil")
-      wildPokemonLost()
-      return
-    end
-  end
-
-  showMoveButtons(DEFENDER)
-  updateStatus(DEFENDER, defenderData.status)
-end
-
-function wildPokemonLost()
-
-  attackerData.wildPokemonGUID = nil
-  clearPokemonData(DEFENDER)
-  endBattle()
-
-end
-
-function pokemonFaint(isAttacker, data)
-  -- Flip token
-  local pokemon = getObjectFromGUID(data.pokemonGUID)
-  local rotation = pokemon.getRotation()
-  pokemon.setRotation({rotation.x, rotation.y, 180})
-
-  -- Remove status
-  if data.status ~= nil then
-    local card = getObjectFromGUID(data.statusCardGUID)
-    destroyObject(card)
-    data.status = nil
-  end
-
-  -- Remove status counters
-  local castParam = {}
-  if isAttacker then
-    castParam.origin = {attackerPos.statusCounters[1], 2, attackerPos.statusCounters[2]}
-  else
-    castParam.origin = {defenderPos.statusCounters[1], 2, defenderPos.statusCounters[2]}
-  end
-
-  castParam.direction = {0,-1,0}
-  castParam.type = 1
-  castParam.max_distance = 2
-  castParam.debug = debug
-  local hits = Physics.cast(castParam)
-  if #hits ~= 0 then
-    local counters = hits[1].hit_object
-    if counters.hasTag("Status Counter") then
-      counters.destruct()
-    end
-  end
-
-  --recallArena({player = player, arenaAttack = isAttacker, zPos = -0.1})
-end
-
-function noPokemonInArena()
-    print("There is no Pokémon in the Arena")
-end
-
+-- Performs move 1.
 function attackMove1()
   selectMove(1, ATTACKER)
 end
 
+-- Performs move 2.
 function attackMove2()
   selectMove(2, ATTACKER)
 end
 
+-- Performs move 3.
 function attackMove3()
   selectMove(3, ATTACKER)
 end
 
+-- Performs move 4.
 function attackMove4()
   selectMove(4, ATTACKER)
 end
 
+-- Performs move 1.
 function defenseMove1()
   selectMove(1, DEFENDER)
 end
 
+-- Performs move 2.
 function defenseMove2()
   selectMove(2, DEFENDER)
 end
 
+-- Performs move 3.
 function defenseMove3()
   selectMove(3, DEFENDER)
 end
 
+-- Performs move 4.
 function defenseMove4()
   selectMove(4, DEFENDER)
+end
+
+-- Returns random move index.
+local function getRandomMoveIndex(movesData)
+  if not movesData then
+    return nil
+  end
+
+  local valid = {}
+  for i=1, 4 do
+    local move = movesData[i]
+    if move and move.status ~= DISABLED then
+      table.insert(valid, i)
+    end
+  end
+
+  if #valid == 0 then
+    return nil
+  end
+
+  return valid[math.random(#valid)]
+end
+
+-- Handles random attack move.
+function randomAttackMove()
+  if not attackerPokemon or not attackerPokemon.movesData then
+    return
+  end
+
+  local index = getRandomMoveIndex(attackerPokemon.movesData)
+  if index then
+    selectMove(index, ATTACKER, true)
+  end
+end
+
+-- Handles random defense move.
+function randomDefenseMove()
+  if not defenderPokemon or not defenderPokemon.movesData then
+    return
+  end
+
+  local index = getRandomMoveIndex(defenderPokemon.movesData)
+  if index then
+    selectMove(index, DEFENDER, true)
+  end
 end
 
 -- Helper function used to determine an initial move power.
@@ -2061,6 +1690,34 @@ local function moveHasEffect(moveData, effectToFind)
   return false
 end
 
+-- Returns whether opponent immune to move.
+local function isOpponentImmuneToMove(moveData, opponentPokemon)
+  if not moveData or not moveData.type or not opponentPokemon or not opponentPokemon.types then
+    return false
+  end
+
+  local opponent_types = {}
+  if opponentPokemon.teraActive and opponentPokemon.teraType ~= nil and opponentPokemon.teraType ~= "Stellar" then
+    opponent_types = { opponentPokemon.teraType }
+  elseif Global.call("getDualTypeEffectiveness") and opponentPokemon.types[2] ~= nil then
+    opponent_types = { opponentPokemon.types[1], opponentPokemon.types[2] }
+  else
+    opponent_types = { opponentPokemon.types[1] }
+  end
+
+  local immunityData = Global.call("GetImmunityDataByName", moveData.type)
+  for _, immune_type in ipairs(immunityData.immune or {}) do
+    for _, opponent_type in ipairs(opponent_types) do
+      if immune_type == opponent_type then
+        return true
+      end
+    end
+  end
+
+  return false
+end
+
+-- Handles parse type enhancer type.
 local function parseTypeEnhancerType(card_name)
   if not card_name then
     return nil
@@ -2075,6 +1732,7 @@ local function parseTypeEnhancerType(card_name)
   return nil
 end
 
+-- Handles select move isAttacker selects attacker/defender.
 function selectMove(index, isAttacker, isRandom)
   -- For safety, sanitize the isRandom parameter.
   if isRandom == nil then
@@ -2155,14 +1813,36 @@ function selectMove(index, isAttacker, isRandom)
     end
   end
 
+  local opponent_pokemon = isAttacker and defenderPokemon or attackerPokemon
+  local is_stellar = pokemon.teraActive == true and pokemon.teraType == "Stellar"
+  local move_is_immune = is_stellar and false or isOpponentImmuneToMove(moveData, opponent_pokemon)
+
+  -- Check if this move has Disable effects.
+  if not move_is_immune and moveHasEffect(moveData, status_ids.disable) then
+    showMoveDisableButtons(not isAttacker, true)
+  end
+
+  -- Recharge disables the selected move for the user, even if the opponent is immune.
+  if moveHasEffect(moveData, status_ids.recharge) then
+    if pokemon and pokemon.movesData and pokemon.movesData[index] then
+      pokemon.movesData[index].status = DISABLED
+      updateTypeEffectiveness()
+    end
+  end
+
   -- Check for special effects.
   if not isAttacker then
-    -- Get Pokemon names.
+    -- Get Pokemon names, move and immunity status.
     local attacker_pokemon_name = getPokemonNameInPlay(ATTACKER)
     local defender_pokemon_name = getPokemonNameInPlay(DEFENDER)
+    local attacker_move_data = attackerData and (attackerData.selectedMoveData or (attackerPokemon and attackerPokemon.movesData and attackerPokemon.movesData[attackerData.selectedMoveIndex])) or nil
+    local attacker_move_is_immune = isOpponentImmuneToMove(attacker_move_data, defenderPokemon)
+    if attackerPokemon and attackerPokemon.teraActive == true and attackerPokemon.teraType == "Stellar" then
+      attacker_move_is_immune = false
+    end
     
     -- Adjust the Defender move power for Reversal effects.
-    if moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
+    if not attacker_move_is_immune and moveHasEffect(attackerData.selectedMoveData, status_ids.reversal) then
       -- Adjust the Attacker move power for Reversal effects.
       updateAttackValueCounter(ATTACKER)
       local adjustment = pokemonData.attackValue.movePower
@@ -2175,7 +1855,7 @@ function selectMove(index, isAttacker, isRandom)
       end
     end
     -- Adjust the Attacker (opponent) data for Reversal effects. 
-    if moveHasEffect(moveData, status_ids.reversal) then
+    if not move_is_immune and moveHasEffect(moveData, status_ids.reversal) then
       -- Make sure the Defender did not pick their move first like a dummy.
       if opponentData and opponentData.attackValue.level then
         pokemonData.attackValue.movePower = handleStringPowerLevels(opponentData, opponentData.attackValue.level, pokemonData.attackValue.level)
@@ -2189,7 +1869,7 @@ function selectMove(index, isAttacker, isRandom)
     end
 
     -- Adjust the Defender move power for Protection effects.
-    if moveHasEffect(attackerData.selectedMoveData, status_ids.protection) then
+    if not attacker_move_is_immune and moveHasEffect(attackerData.selectedMoveData, status_ids.protection) then
       pokemonData.attackValue.movePower = 0
       if defenderData.vitamin == nil or defenderData.vitamin == false then
         pokemonData.attackValue.item = 0
@@ -2197,7 +1877,7 @@ function selectMove(index, isAttacker, isRandom)
       printToAll(attacker_pokemon_name .. " protected itself!")
     end
     -- Adjust the Attacker (opponent) move power for Protection effects.
-    if moveHasEffect(moveData, status_ids.protection) then
+    if not move_is_immune and moveHasEffect(moveData, status_ids.protection) then
       if opponentData and opponentData.attackValue.level then
         opponentData.attackValue.movePower = 0
         if attackerData.vitamin == nil or attackerData.vitamin == false then
@@ -2210,7 +1890,7 @@ function selectMove(index, isAttacker, isRandom)
   end
 
   -- Adjust the move power for ConditionBoost effects.
-  if moveHasEffect(moveData, status_ids.conditionBoost) then
+  if not move_is_immune and moveHasEffect(moveData, status_ids.conditionBoost) then
     local opponentPokemon = isAttacker and defenderPokemon or attackerPokemon
     if opponentPokemon and opponentPokemon.status ~= nil then
       pokemonData.attackValue.effect = 1
@@ -2242,12 +1922,6 @@ function selectMove(index, isAttacker, isRandom)
     end
   end
 
-  -- Check for Stellar.
-  local is_stellar = false
-  if pokemon.teraActive == true and pokemon.teraType == "Stellar" then
-    is_stellar = true
-  end
-
   -- If this move is Judgement we need to change the type if there is a Type Enhancer.
   if moveData.name == "Judgement" then
     local pokemon_data = isAttacker and attackerPokemon or defenderPokemon
@@ -2264,12 +1938,7 @@ function selectMove(index, isAttacker, isRandom)
   local calculateEffectiveness = true
   if is_stellar then 
     calculateEffectiveness = false
-
-    -- Immunities are still calculated.
-    local tempEffectiveness = calculateMoveEffectiveness(moveData, typeData, opponent_types, pokemonData.attackValue, opponent_data.name)
-    if pokemonData.attackValue.immune == true then
-      pokemonData.attackValue.effectiveness = tempEffectiveness
-    end
+    pokemonData.attackValue.immune = false
   end
 
   -- If move had NEUTRAL effect, don't calculate effectiveness.
@@ -2289,7 +1958,7 @@ function selectMove(index, isAttacker, isRandom)
 
   -- If this is Flying Press, we should check which is better out of Fighting/Flying. The default is Fighting.
   local moveType = moveData.type
-  if moveData.name == "Flying Press" then
+  if calculateEffectiveness and moveData.name == "Flying Press" then
     -- Determine the effectiveness when Flying type.
     local tempMoveDataFlying = copyTable(moveData)
     tempMoveDataFlying.type = "Flying"
@@ -2326,12 +1995,12 @@ function selectMove(index, isAttacker, isRandom)
 
   -- Get the active model GUID. This prevents calling animations for the wrong model.
   local model_guid = nil
-  local pokemonData = isAttacker and attackerPokemon or defenderPokemon
-  if pokemonData ~= nil then
+  local pokemonModelData = isAttacker and attackerPokemon or defenderPokemon
+  if pokemonModelData ~= nil then
     local chip_guid = isAttacker and attackerPokemon.pokemonGUID or defenderPokemon.pokemonGUID
     model_guid = Global.call("get_model_guid", chip_guid)
     if model_guid == nil then
-      model_guid = pokemonData.model_GUID
+      model_guid = pokemonModelData.model_GUID
     end
   end
 
@@ -2386,40 +2055,59 @@ function selectMove(index, isAttacker, isRandom)
     end
   end
 
-  if battleState ~= SELECT_MOVE then
-    -- Easter egg. 1% chance to say funny names.
-    local easter_egg_chance = math.random(100)
-    if moveName == "Pin Missile" and easter_egg_chance == 1 then
-      moveName = "Piss Missile"
-    elseif moveName == "Mindstorm" and easter_egg_chance == 1 then
-      moveName = "Shitstorm"
-    end
+  -- Easter egg. 1% chance to say funny names.
+  local easter_egg_chance = math.random(100)
+  if moveName == "Pin Missile" and easter_egg_chance == 1 then
+    moveName = "Piss Missile"
+  elseif moveName == "Mindstorm" and easter_egg_chance == 1 then
+    moveName = "Shitstorm"
+  end
 
-    local pokemonName = isAttacker and attackerPokemon.name or defenderPokemon.name
-    if isRandom then
-      printToAll(pokemonName .. " randomly used " .. string.upper(moveName) .. "!")
-    else
-      printToAll(pokemonName .. " used " .. string.upper(moveName) .. "!")
-    end
+  -- Log the move.
+  local pokemonName = isAttacker and attackerPokemon.name or defenderPokemon.name
+  local opponentName = getPokemonNameInPlay(not isAttacker)
+  local immunitiesEnabled = Global.call("getImmunitiesEnabled")
+  if isRandom then
+    printToAll(pokemonName .. " randomly used " .. string.upper(moveName) .. "!")
+  else
+    printToAll(pokemonName .. " used " .. string.upper(moveName) .. "!")
+  end
+
+  -- Give a cool print statement if the move was immune.
+  if immunitiesEnabled and pokemonData and pokemonData.attackValue and pokemonData.attackValue.immune then
+    printToAll("It doesn't affect the opposing " .. tostring(opponentName) .. "...")
+  end
+end
+
+-- Clears selected move isAttacker selects attacker/defender.
+function clearSelectedMove(isAttacker)
+  -- Safety guard.
+  local data = isAttacker and attackerData or defenderData
+  if not data or not data.attackValue then
     return
   end
 
-  hideArenaMoveButtons(isAttacker)
+  data.selectedMoveIndex = -1
+  data.selectedMoveData = nil
 
-  if isAttacker then
-    attackerConfirmed = true
-  else
-    defenderConfirmed = true
-  end
+  -- Reset move-related values while preserving persistent modifiers.
+  local level = data.attackValue.level
+  local status = data.attackValue.status
+  local booster = data.attackValue.booster
+  local item = data.attackValue.item
+  data.attackValue = copyTable(DEFAULT_ARENA_DATA.attackValue)
+  data.attackValue.level = level
+  data.attackValue.status = status
+  data.attackValue.booster = booster
+  data.attackValue.item = item
+  data.diceMod = 0
+  data.addDice = 0
 
-  if attackerConfirmed and defenderConfirmed then
-    activateMoves()
-  elseif attackerConfirmed and defenderData.type == GYM then
-    if aiDifficulty == 2 then
-      local randomMove = math.random(1,3)
-      selectMove(randomMove, DEFENDER, true)
-    end
-  end
+  -- Update the counter.
+  updateAttackValueCounter(isAttacker)
+
+  -- Remove the text for the selected move.
+  clearMoveText(isAttacker)
 end
 
 -- Helper function to calculate effectiveness for a particular move.
@@ -2469,12 +2157,10 @@ function calculateMoveEffectiveness(moveData, typeData, opponent_types, attack_v
   -- TODO: This does not offer labels.
   if moveData.effects then
     for j=1, #moveData.effects do
-      -- If this is SaltCure, it is additionally effective against Rock and Water types.
+      -- If this is SaltCure, it is additionally effective against Water and Steel types.
       if moveData.effects[j].name == status_ids.saltCure then
-        --print("TEMP | checking SaltCure effectiveness")
         for type_index = 1, type_length do
           if opponent_types[type_index] == "Water" or opponent_types[type_index] == "Steel" then
-            --print("TEMP | SaltCure added effectiveness against type: " .. opponent_types[type_index])
             effectiveness = effectiveness + 2
           end
         end
@@ -2509,227 +2195,121 @@ function calculateMoveEffectiveness(moveData, typeData, opponent_types, attack_v
   return effectiveness
 end
 
-function activateMoves()
-
-  -- Hide move buttons for pokemon that can't select a move
-  hideArenaMoveButtons(ATTACKER)
-  hideArenaMoveButtons(DEFENDER)
-
-  setMoveData(ATTACKER)
-  setMoveData(DEFENDER)
-
-  if attackerData.selectedMoveData.effects ~= nil or defenderData.selectedMoveData.effects~= nil then
-    activateEffects()
-  end
-
-  if battleState ~= ROLL_EFFECTS then
-
-    setBattleState(ROLL_ATTACK)
-
-    spawnDice(attackerData.selectedMoveData, ATTACKER, attackerPokemon.effects)
-    spawnDice(defenderData.selectedMoveData, DEFENDER, defenderPokemon.effects)
-
-    showConfirmButton(ATTACKER, "CONFIRM")
-    showConfirmButton(DEFENDER, "CONFIRM")
-  end
-end
-
-function setMoveData(isAttacker)
-
-  if isAttacker then
-    data = attackerData
-    pokemonData = attackerPokemon
-  else
-    data = defenderData
-    pokemonData = defenderPokemon
-  end
-
-  move = data.selectedMoveData
-  moves = pokemonData.movesData
-  moveIndex = data.selectedMoveIndex
-
-  if move == nil then
-    move = copyTable(moves[moveIndex])
-    local moveName = move.name
-    if moveName == "Mirror Move" then
-      if isAttacker then
-        move = copyTable(defenderMoves[defenderSelectedMove])
-      else
-        move = copyTable(attackerMoves[attackerSelectedMove])
-      end
-    end
-  end
-
-  local moveName = move.name
-  local moveType = move.type
-
-  -- Calculate Power
-  local movePower
-  if move.power == status_ids.the_self then
-    movePower = math.floor((trainerData.level/2)+0.5)
-  elseif move.power == status_ids.enemy then
-    local oppData = isAttacker and defenderData or attackerData
-    movePower = math.floor((oppData.level/2)+0.5)
-  else
-    movePower = move.power
-  end
-  if move.STAB == true then
-    local types = pokemonData.types
-    for i=1, #types do
-      if types[1] == moveType then
-        movePower = movePower + 1
-        break
-      end
-    end
-  end
-
-  -- Calculate Effectiveness
-  local effectiveness = 0
-  if move.status == EFFECTIVE then
-    effectiveness = effectiveness + 2
-  elseif move.status == WEAK then
-    effectiveness = effectiveness - 2
-  end
-
-  if isAttacker then
-    attackerData.selectedMoveData = move
-  else
-    defenderData.selectedMoveData = move
-  end
-
-  data.attackValue.movePower = movePower
-  data.attackValue.effectiveness = effectiveness
-
-  updateAttackValueCounter(isAttacker)
-end
-
-
-function activateEffects()
-
-  local rollEffectsAttacker = requiresEffectDice(ATTACKER, attackerData.selectedMoveData.effects)
-  local rollEffectsDefender = requiresEffectDice(DEFENDER, defenderData.selectedMoveData.effects)
-
-  if rollEffectsAttacker or rollEffectsDefender then
-    setBattleState(ROLL_EFFECTS)
-  else
-    triggerPlayerEffects()
-  end
-end
-
-function requiresEffectDice(isAttacker, effects)
-
-  if effects == nil then
-    return false
-  end
-
-  local rollEffects = false
-  for i = 1, #effects do
-    effect = effects[i]
-    if effect.chance ~= nil then
-      if effectCanTrigger(isAttacker, effect.name) then
-        spawnEffectDice(isAttacker)
-        rollEffects = true
-        showConfirmButton(isAttacker, "CONFIRM")
-      end
-    end
-  end
-  return rollEffects
-end
-
-function resolveEffects()
-
-    triggerPlayerEffects()
-
-    setBattleState(ROLL_ATTACK)
-
-    updateStatus(ATTACKER, attackerData.status)
-    updateStatus(DEFENDER, defenderData.status)
-
-    clearDice(ATTACKER)
-    clearDice(DEFENDER)
-
-    spawnDice(attackerData.selectedMoveData, ATTACKER, attackerPokemon.effects)
-    spawnDice(defenderData.selectedMoveData, DEFENDER, defenderPokemon.effects)
-
-    showConfirmButton(ATTACKER, "CONFIRM")
-    showConfirmButton(DEFENDER, "CONFIRM")
-end
-
-
-function triggerPlayerEffects()
-
-  if attackerData.selectedMoveData.effects ~= nil then
-    checkChance = #attackerData.dice > 0
-    calculateEffects(ATTACKER, attackerData.selectedMoveData, checkChance)
-  end
-  if defenderData.selectedMoveData.effects ~= nil then
-    checkChance = #defenderData.dice > 0
-    calculateEffects(DEFENDER, defenderData.selectedMoveData, checkChance)
-  end
-
-end
-
-
-function calculateEffects(isAttacker, move, checkChance)
-
-  local diceValue = 0
-  if checkChance then
-    local dice = isAttacker and attackerData.dice[1] or defenderData.dice[1]
-    diceValue = getObjectFromGUID(dice).getValue()
-    clearDice(isAttacker)
-  end
-
-  local effects = move.effects
-  local effect
-  for i=1, #effects do
-    local effect = effects[i]
-    if effect.chance ~= nil then
-      if diceValue >= effect.chance then
-        triggerEffect(isAttacker, effect)
-      end
-    elseif effect.condition ~= nil then
-      local oppAtkValue = isAttacker and attackerData.attackValue or defenderData.attackValue
-      if effect.condition == "Power" and oppAtkValue.movePower > 0 then
-        triggerEffect(isAttacker, effect)
-      end
-    else
-      triggerEffect(isAttacker, effect)
-    end
-  end
-end
-
-function triggerEffect(isAttacker, effect)
-
-  local effectName = effect.name
-  if isStatus(effectName) then
-    addStatus(not isAttacker, effectName)
-  elseif effect.target == status_ids.the_self then
-    addEffect(isAttacker, effectName)
-  else
-    addEffect(not isAttacker, effectName)
-  end
-end
-
+-- Returns whether status.
 function isStatus(effectName)
-  if effectName == status_ids.burn or effectName == status_ids.poison or effectName == status_ids.paralyze or effectName == status_ids.sleep or effectName == status_ids.confuse or effectName == status_ids.freeze then
+  if effectName == status_ids.burn or effectName == status_ids.poison or effectName == status_ids.paralyze or effectName == status_ids.sleep or effectName == status_ids.confuse or effectName == status_ids.freeze or effectName == status_ids.curse then
     return true
   else
     return false
   end
 end
 
-function addEffect(isAttacker, effect)
-
-  if isAttacker then
-    table.insert(attackerPokemon.effects, effect)
-  else
-    table.insert(defenderPokemon.effects, effect)
-  end
-
+-- Returns whether status card name.
+local function is_status_card_name(status_name)
+  return isStatus(status_name)
 end
 
-function addStatus(isAttacker, status, noSim)
+-- Returns status types for pokemon.
+local function get_status_types_for_pokemon(pokemon)
+  if not pokemon or not pokemon.types then
+    return {}
+  end
 
+  if pokemon.teraActive and pokemon.teraType and pokemon.teraType ~= "Stellar" then
+    return { pokemon.teraType }
+  end
+
+  if Global.call("getDualTypeEffectiveness") and pokemon.types[2] then
+    return { pokemon.types[1], pokemon.types[2] }
+  end
+
+  return { pokemon.types[1] }
+end
+
+-- Returns whether pokemon immune to status status is the status id/name.
+local function is_pokemon_immune_to_status(pokemon, status)
+  if not Global.call("getImmunitiesEnabled") then
+    return false
+  end
+
+  local immune_types = status_immunity_types[status]
+  if not immune_types then
+    return false
+  end
+
+  for _, type_name in ipairs(get_status_types_for_pokemon(pokemon)) do
+    if immune_types[type_name] then
+      return true
+    end
+  end
+
+  return false
+end
+
+-- Announces status immunity status is the status id/name.
+local function announceStatusImmunity(status, pokemon_name)
+  if not status or not pokemon_name then return end
+
+  local type_lookup = {
+    [status_ids.poison]   = "Poison",
+    [status_ids.burn]     = "Fire",
+    [status_ids.paralyze] = "Electric",
+    [status_ids.freeze]   = "Ice",
+  }
+
+  local type_name = type_lookup[status]
+  local color = type_name and Global.call("type_to_color_lookup", type_name) or nil
+  printToAll(string.format("%s is immune to %s.", pokemon_name, status), color)
+end
+
+-- Handles return status card to bag status is the status id/name.
+local function returnStatusCardToBag(status, card)
+  if not card then return end
+
+  local bag_guid = status_bag_guid_by_status[status]
+  local bag = bag_guid and getObjectFromGUID(bag_guid) or nil
+  if bag then
+    bag.putObject(card)
+  else
+    destroyObject(card)
+  end
+end
+
+-- Attempts to apply status from zone isAttacker selects attacker/defender.
+local function tryApplyStatusFromZone(isAttacker, status_card)
+  if not status_card then return nil, false end
+
+  local status_name = status_card.getName()
+  if not is_status_card_name(status_name) then
+    return nil, false
+  end
+
+  local data = isAttacker and attackerPokemon or defenderPokemon
+  if not data then
+    return false, false
+  end
+
+  local card_guid = status_card.getGUID()
+  if data.status ~= nil then
+    if data.statusCardGUID == card_guid then
+      return true, false
+    end
+    printToAll("PokAcmon already has a status.")
+    return false, false
+  end
+
+  if is_pokemon_immune_to_status(data, status_name) then
+    announceStatusImmunity(status_name, getPokemonNameInPlay(isAttacker))
+    return false, false
+  end
+
+  data.status = status_name
+  data.statusCardGUID = card_guid
+  return true, true
+end
+
+-- Adds status isAttacker selects attacker/defender. status is the status id/name.
+function addStatus(isAttacker, status)
   local pos
   local data
   if isAttacker then
@@ -2748,18 +2328,20 @@ function addStatus(isAttacker, status, noSim)
     return
   end
 
+  if is_pokemon_immune_to_status(data, status) then
+    announceStatusImmunity(status, getPokemonNameInPlay(isAttacker))
+    return
+  end
+
   local obj
-  local resolveStatus = false
   if status == status_ids.burn then
     obj = getObjectFromGUID(statusGUID.burned)
   elseif status == status_ids.paralyze then
     obj = getObjectFromGUID(statusGUID.paralyzed)
-    resolveStatus = true
   elseif status == status_ids.poison then
     obj = getObjectFromGUID(statusGUID.poisoned)
   elseif status == status_ids.sleep then
     obj = getObjectFromGUID(statusGUID.sleep)
-    resolveStatus = true
   elseif status == status_ids.freeze then
     obj = getObjectFromGUID(statusGUID.frozen)
   elseif status == status_ids.confuse then
@@ -2769,120 +2351,9 @@ function addStatus(isAttacker, status, noSim)
   end
   local card = obj.takeObject()
   card.setPosition({pos.status[1], 1, pos.status[2]})
-
-  -- if resolveStatus then
-  --   setBattleState(RESOLVE_STATUS)
-  --   showConfirmButton(isAttacker, "CONFIRM")
-  --   spawnStatusDice(isAttacker)
-  -- end
-
-  if not noSim then
-    data.status = status
-    data.statusCardGUID = card.getGUID()
-  end
 end
 
-function effectCanTrigger(isAttacker, effect)
-
-  local data = isAttacker and defenderData or attackerData
-
-  if isStatus(effect) and data.status ~= nil then
-    return false
-  else
-    return true
-  end
-end
-
-function updateStatus(isAttacker, status)
-
-  if status == nil then
-    return
-  elseif status == status_ids.burn then
-    updateBurnStatus(isAttacker)
-  elseif status == status_ids.poison then
-    updatePoisonStatus(isAttacker)
-  elseif status == status_ids.sleep then
-    updateSleepStatus(isAttacker)
-  elseif status == status_ids.paralyze then
-    updateParalyzeStatus(isAttacker)
-  elseif status == status_ids.freeze then
-    updateFreezeStatus(isAttacker)
-  end
-
-  print(tostring(isAttacker) .. "," .. status)
-end
-
-function updateBurnStatus(isAttacker)
-
-  if battleState == ROLL_ATTACK then -- Lower move's power by 1
-    local attackValue = isAttacker and attackerAttackValue or defenderAttackValue
-    if attackValue.movePower > 0 then
-      attackValue.movePower = attackValue.movePower - 1
-    end
-  elseif battleState == RESOLVE then -- Add status counter
-    if isAttacker then
-      passParams = {player = attackPlayer, arenaAttack = true, zPos = -0.1}
-      data = attackerPokemon
-      player = attackPlayer
-    else
-      passParams = {player = defendPlayer, arenaAttack = false, zPos = -0.1}
-      data = defenderPokemon
-      player = defendPlayer
-    end
-    if data.statusCounters == 3 then
-      local pokemonName = data.name
-      printToAll(pokemonName .. " faints from Burn")
-      pokemonFaint(isAttacker, data)
-    else
-      addStatusCounter(passParams)
-    end
-  end
-end
-
-function updatePoisonStatus(isAttacker)
-
-  if battleState == RESOLVE then -- Add status counter
-    if isAttacker then
-      passParams = {player = attackPlayer, arenaAttack = true, zPos = -0.1}
-    else
-      passParams = {player = defendPlayer, arenaAttack = false, zPos = -0.1}
-    end
-    addStatusCounter(passParams)
-  end
-end
-
-function updateSleepStatus(isAttacker)
-
-  if isAttacker then
-    move = attackerMove
-    data = attackerData
-  else
-    move = defenderMove
-    data = defenderData
-  end
-  if battleState == SELECT_POKEMON then -- Remove status counter
-    local numCounters = removeStatusCounter(isAttacker)
-    if numCounters == 0 then
-      removeStatus(data)
-    else
-      clearMoveData(isAttacker, " is fast asleep!")
-    end
-  elseif battleState == ROLL_ATTACK then
-    if data.statusCounters > 0 then
-      clearMoveData(isAttacker, " is fast asleep!")
-    end
-  end
-end
-
-function updateParalyzeStatus(isAttacker)
-  if battleState == RESOLVE then
-      local statusCard = getObjectFromGUID(data.statusCardGUID)
-      if statusCard.getRotation().z == 180 then
-        statusCard.flip()
-      end
-  end
-end
-
+-- Flips status isAttacker selects attacker/defender.
 function flipStatus(isAttacker, isActive)
   local data
   if isAttacker then
@@ -2911,13 +2382,7 @@ function flipStatus(isAttacker, isActive)
   )
 end
 
-function updateFreezeStatus(isAttacker)
-
-  if battleState == ROLL_ATTACK then
-    clearMoveData(isAttacker, " is frozen solid!")
-  end
-end
-
+-- Adds status counters isAttacker selects attacker/defender.
 function addStatusCounters(isAttacker, numCounters)
 
   if isAttacker then
@@ -2930,6 +2395,7 @@ function addStatusCounters(isAttacker, numCounters)
   end
 end
 
+-- Removes status.
 function removeStatus(data)
   if not data then return end
   data.status = nil
@@ -2942,34 +2408,7 @@ function removeStatus(data)
   end
 end
 
-function spawnEffectDice(isAttacker)
-
-  local diceTable = isAttacker and attackerData.dice or defenderData.dice
-  local pos = isAttacker and attackerPos or defenderPos
-  diceBag = getObjectFromGUID(effectDice)
-  dice = diceBag.takeObject()
-  dice.setPosition({pos.moveDice[1], 2, pos.moveDice[2]})
-  table.insert(diceTable, dice.guid)
-
-  if isAITrainer(isAttacker) then
-    dice.randomize()
-  end
-end
-
-function spawnStatusDice(isAttacker)
-
-  local diceTable = isAttacker and attackerDice or defenderDice
-  local pos = isAttacker and attackerPos or defenderPos
-  diceBag = getObjectFromGUID("7c6144")
-  dice = diceBag.takeObject()
-  dice.setPosition({pos.moveDice[1], 2, pos.moveDice[2]})
-  table.insert(diceTable, dice.guid)
-
-  if isAITrainer(isAttacker) then
-    dice.randomize()
-  end
-end
-
+-- Spawns dice isAttacker selects attacker/defender.
 function spawnDice(move, isAttacker, effects)
 
   local diceTable = isAttacker and attackerData.dice or defenderData.dice
@@ -3026,6 +2465,7 @@ function spawnDice(move, isAttacker, effects)
   end
 end
 
+-- Handles increase atk arena.
 function increaseAtkArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == attackerData.playerColor then
@@ -3034,6 +2474,7 @@ function increaseAtkArena(obj, player_clicker_color)
     end
 end
 
+-- Handles decrease atk arena.
 function decreaseAtkArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == attackerData.playerColor then
@@ -3042,6 +2483,7 @@ function decreaseAtkArena(obj, player_clicker_color)
     end
 end
 
+-- Handles increase def arena.
 function increaseDefArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == defenderData.playerColor then
@@ -3050,6 +2492,7 @@ function increaseDefArena(obj, player_clicker_color)
     end
 end
 
+-- Handles decrease def arena.
 function decreaseDefArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == defenderData.playerColor then
@@ -3058,6 +2501,7 @@ function decreaseDefArena(obj, player_clicker_color)
     end
 end
 
+-- Evolves atk.
 function evolveAtk(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == attackerData.playerColor then
@@ -3066,6 +2510,7 @@ function evolveAtk(obj, player_clicker_color)
     end
 end
 
+-- Evolves two atk.
 function evolveTwoAtk(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == attackerData.playerColor then
@@ -3074,6 +2519,7 @@ function evolveTwoAtk(obj, player_clicker_color)
     end
 end
 
+-- Evolves def.
 function evolveDef(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == defenderData.playerColor then
@@ -3082,6 +2528,7 @@ function evolveDef(obj, player_clicker_color)
     end
 end
 
+-- Evolves two def.
 function evolveTwoDef(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == defenderData.playerColor then
@@ -3090,6 +2537,7 @@ function evolveTwoDef(obj, player_clicker_color)
     end
 end
 
+-- Recalls atk arena.
 function recallAtkArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == attackerData.playerColor then
@@ -3100,6 +2548,7 @@ function recallAtkArena(obj, player_clicker_color)
     return false
 end
 
+-- Recalls def arena.
 function recallDefArena(obj, player_clicker_color)
     local playerColour = player_clicker_color
     if playerColour == defenderData.playerColor then
@@ -3110,12 +2559,19 @@ function recallDefArena(obj, player_clicker_color)
     return false
 end
 
+-- Recalls and faint attacker pokemon.
 function recallAndFaintAttackerPokemon(obj, player_clicker_color)
   -- Get the attacker token GUID.
   local token = nil
   if attackerPokemon.pokemonGUID ~= nil then
     token = getObjectFromGUID(attackerPokemon.pokemonGUID)
   end
+
+  -- Remove any status if it is present.
+  if attackerPokemon and attackerPokemon.status ~= nil then
+    removeStatus(attackerPokemon)
+  end
+  removeStatusAndTokens(ATTACKER)
 
   -- Try to recall the attacker token.
   if recallAtkArena(obj, player_clicker_color) then
@@ -3136,12 +2592,19 @@ function recallAndFaintAttackerPokemon(obj, player_clicker_color)
   end
 end
 
+-- Recalls and faint defender pokemon.
 function recallAndFaintDefenderPokemon(obj, player_clicker_color)
   -- Get the defender token GUID.
   local token = nil
   if defenderPokemon.pokemonGUID ~= nil then
     token = getObjectFromGUID(defenderPokemon.pokemonGUID)
   end
+
+  -- Remove any status if it is present.
+  if defenderPokemon and defenderPokemon.status ~= nil then
+    removeStatus(defenderPokemon)
+  end
+  removeStatusAndTokens(DEFENDER)
 
   -- Try to recall the defender token.
   if recallDefArena(obj, player_clicker_color) then
@@ -3162,38 +2625,43 @@ function recallAndFaintDefenderPokemon(obj, player_clicker_color)
   end
 end
 
+-- Adds atk status.
 function addAtkStatus(obj, player_clicker_color)
-    local playerColour = player_clicker_color
-    if playerColour == attackerData.playerColor or attackerData.playerColor == nil then
-        passParams = {player = playerColour, arenaAttack = true, zPos = -0.1}
-        addStatusCounter(passParams)
-    end
+  local playerColour = player_clicker_color
+  if playerColour == attackerData.playerColor or attackerData.playerColor == nil then
+    passParams = {player = playerColour, arenaAttack = true, zPos = -0.1}
+    addStatusCounter(passParams)
+  end
 end
 
+-- Removes atk status.
 function removeAtkStatus(obj, player_clicker_color)
-    local playerColour = player_clicker_color
-    if playerColour == attackerData.playerColor or attackerData.playerColor == nil then
-        passParams = {player = playerColour, arenaAttack = true, zPos = -0.1}
-        removeStatusCounter(ATTACKER)
-    end
+  local playerColour = player_clicker_color
+  if playerColour == attackerData.playerColor or attackerData.playerColor == nil then
+    passParams = {player = playerColour, arenaAttack = true, zPos = -0.1}
+    removeStatusCounter(ATTACKER)
+  end
 end
 
+-- Adds def status.
 function addDefStatus(obj, player_clicker_color)
-    local playerColour = player_clicker_color
-    if playerColour == defenderData.playerColor or defenderData.playerColor == nil then
-        passParams = {player = playerColour, arenaAttack = false, zPos = -0.1}
-        addStatusCounter(passParams)
-    end
+  local playerColour = player_clicker_color
+  if playerColour == defenderData.playerColor or defenderData.playerColor == nil then
+    passParams = {player = playerColour, arenaAttack = false, zPos = -0.1}
+    addStatusCounter(passParams)
+  end
 end
 
+-- Removes def status.
 function removeDefStatus(obj, player_clicker_color)
-    local playerColour = player_clicker_color
-    if playerColour == defenderData.playerColor or defenderData.playerColor == nil then
-        passParams = {player = playerColour, arenaAttack = false, zPos = -0.1}
-        removeStatusCounter(DEFENDER)
-    end
+  local playerColour = player_clicker_color
+  if playerColour == defenderData.playerColor or defenderData.playerColor == nil then
+    passParams = {player = playerColour, arenaAttack = false, zPos = -0.1}
+    removeStatusCounter(DEFENDER)
+  end
 end
 
+-- Evolves evolve params supplies inputs.
 function evolve(params)
   local playerColour = params.player
   local attDefParams = {arenaAttack = params.arenaAttack, zPos = params.zPos}
@@ -3215,27 +2683,29 @@ function evolve(params)
   attDefParams = nil
 end
 
+-- Evolves two.
 function evolveTwo(passParams)
-    local playerColour = passParams.player
-    attDefParams = {arenaAttack = passParams.arenaAttack, zPos = passParams.zPos}
+  local playerColour = passParams.player
+  attDefParams = {arenaAttack = passParams.arenaAttack, zPos = passParams.zPos}
 
-    if playerColour == "Blue" then
-        getObjectFromGUID(blueRack).call("evolveTwoArena", attDefParams)
-    elseif playerColour == "Green" then
-        getObjectFromGUID(greenRack).call("evolveTwoArena", attDefParams)
-    elseif playerColour == "Orange" then
-        getObjectFromGUID(orangeRack).call("evolveTwoArena", attDefParams)
-    elseif playerColour == "Purple" then
-        getObjectFromGUID(purpleRack).call("evolveTwoArena", attDefParams)
-    elseif playerColour == "Red" then
-        getObjectFromGUID(redRack).call("evolveTwoArena", attDefParams)
-    elseif playerColour == "Yellow" then
-        getObjectFromGUID(yellowRack).call("evolveTwoArena", attDefParams)
-    end
+  if playerColour == "Blue" then
+    getObjectFromGUID(blueRack).call("evolveTwoArena", attDefParams)
+  elseif playerColour == "Green" then
+    getObjectFromGUID(greenRack).call("evolveTwoArena", attDefParams)
+  elseif playerColour == "Orange" then
+    getObjectFromGUID(orangeRack).call("evolveTwoArena", attDefParams)
+  elseif playerColour == "Purple" then
+    getObjectFromGUID(purpleRack).call("evolveTwoArena", attDefParams)
+  elseif playerColour == "Red" then
+    getObjectFromGUID(redRack).call("evolveTwoArena", attDefParams)
+  elseif playerColour == "Yellow" then
+    getObjectFromGUID(yellowRack).call("evolveTwoArena", attDefParams)
+  end
 
-    attDefParams = nil
+  attDefParams = nil
 end
 
+-- Recalls arena.
 function recallArena(passParams)
   local playerColour = passParams.player
   attDefParams = {arenaAttack = passParams.arenaAttack, zPos = passParams.zPos}
@@ -3255,6 +2725,7 @@ function recallArena(passParams)
   end
 end
 
+-- Handles increase arena.
 function increaseArena(passParams)
   local playerColour = passParams.player
   mParams = {modifier = passParams.modifier, arenaAttack = passParams.arenaAttack}
@@ -3274,6 +2745,7 @@ function increaseArena(passParams)
   end
 end
 
+-- Handles decrease arena.
 function decreaseArena(passParams)
   local playerColour = passParams.player
   mParams = {modifier = passParams.modifier, arenaAttack = passParams.arenaAttack}
@@ -3295,43 +2767,6 @@ end
 
 -- Move Camera Buttons
 
--- function seeAttackerRack(obj, player_clicker_color)
---   viewTeam(obj, player_clicker_color, attackerData.playerColor)
--- end
-
--- function seeDefenderRack(obj, player_clicker_color)
---   viewTeam(obj, player_clicker_color, defenderData.playerColor)
--- end
-
--- function viewTeam(obj, playerClicker, team)
---   if team == "Yellow" then
---     showPosition = {x=-21.50,y=0.14,z=-48}
---     camYaw = 0
---   elseif team == "Green" then
---     showPosition = {x=-65,y=0.96,z=-21.5}
---     camYaw = 90
---   elseif team == "Orange" then
---     showPosition = {x=65,y=0.96,z=21.5}
---     camYaw = 270
---   elseif team == "Purple" then
---     showPosition = {x=65,y=0.96,z=-21.5}
---     camYaw = 270
---   elseif team == "Red" then
---     showPosition = {x=21.50,y=0.14,z=-48}
---     camYaw = 0
---   elseif team == "Blue" then
---     showPosition = {x=-65,y=0.96,z=21.5}
---     camYaw = 90
---   end
-
---   Player[playerClicker].lookAt({
---     position = showPosition,
---     pitch    = 60,
---     yaw      = camYaw,
---     distance = 25
---   })
--- end
-
 function showArena(passParams)
   local playerColour = passParams.player_clicker_color
   Player[playerColour].lookAt({
@@ -3342,30 +2777,31 @@ function showArena(passParams)
   })
 end
 
+-- Handles see move rules.
 function seeMoveRules(obj, player_clicker_color)
-    local playerColour = player_clicker_color
-    local showPosition
+  local playerColour = player_clicker_color
+  local showPosition
 
-    if playerColour == "Blue" then
-        showPosition = {x=0.02,y=0.24,z=-55.5}
-    elseif playerColour == "Green" then
-        showPosition = {x=-72,y=0.14,z=0.75}
-    elseif playerColour == "Orange" then
-        showPosition = {x=72,y=0.14,z=0.88}
-    elseif playerColour == "Purple" then
-        showPosition = {x=72,y=0.14,z=0.88}
-    elseif playerColour == "Red" then
-        showPosition = {x=0.02,y=0.24,z=-55.5}
-    elseif playerColour == "Yellow" then
-        showPosition = {x=-72,y=0.14,z=0.75}
-    end
+  if playerColour == "Blue" then
+    showPosition = {x=0.02,y=0.24,z=-55.5}
+  elseif playerColour == "Green" then
+    showPosition = {x=-72,y=0.14,z=0.75}
+  elseif playerColour == "Orange" then
+    showPosition = {x=72,y=0.14,z=0.88}
+  elseif playerColour == "Purple" then
+    showPosition = {x=72,y=0.14,z=0.88}
+  elseif playerColour == "Red" then
+    showPosition = {x=0.02,y=0.24,z=-55.5}
+  elseif playerColour == "Yellow" then
+    showPosition = {x=-72,y=0.14,z=0.75}
+  end
 
-    Player[playerColour].lookAt({
-        position = showPosition,
-        pitch    = 90,
-        yaw      = 0,
-        distance = 22.5
-    })
+  Player[playerColour].lookAt({
+    position = showPosition,
+    pitch    = 90,
+    yaw      = 0,
+    distance = 22.5
+  })
 end
 
 -- Helper function used to prevent people from being lazy about who the gym leader is.
@@ -3402,6 +2838,7 @@ function promptGymLeaderControl(control_type)
   end
 end
 
+-- Sends to arena titan params supplies inputs.
 function sendToArenaTitan(params)
   if defenderData.type ~= nil then
     print("There is already a Pokémon in the arena")
@@ -3447,7 +2884,7 @@ function sendToArenaTitan(params)
   gymLeaderGuid = params.titanGUID
 
   -- Move the button.
-  self.editButton({index=16, position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="recallGymLeader", label="RECALL", tooltip="Recall Titan"})
+  edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="recallGymLeader", label="RECALL", tooltip="Recall Titan"})
 
   if Global.call("get_models_enabled") then
     -- Reformat the data so that the model code can use it. (Sorry, I know this is hideous.) This is extra gross because
@@ -3538,22 +2975,10 @@ function sendToArenaTitan(params)
     2
   )
 
-  if scriptingEnabled then
-    defenderData.attackValue.level = defenderPokemon.baseLevel
-    updateAttackValueCounter(DEFENDER)
-
-    aiDifficulty = Global.call("GetAIDifficulty")
-
-    defenderConfirmed = true
-    if attackerConfirmed then
-      startBattle()
-    end
-  else
-    showAutoRollButtons(true)
-    showFlipGymButton(false)
-    showConfirmButton(DEFENDER, "RANDOM MOVE")
-    moveStatusButtons(true)
-  end
+  showAutoRollButtons(true)
+  showFlipGymButton(false)
+  showRandomMoveButton(DEFENDER)
+  moveStatusButtons(true)
 
   -- Check if HP Rule 2 is enabled.
   if Global.call("getHpRule2Set") then
@@ -3564,6 +2989,7 @@ function sendToArenaTitan(params)
   return true
 end
 
+-- Sends to arena gym params supplies inputs.
 function sendToArenaGym(params)
   if defenderData.type ~= nil then
     print("There is already a Pokémon in the arena")
@@ -3584,9 +3010,13 @@ function sendToArenaGym(params)
   setNewPokemon(defenderPokemon, pokemonData[1], params.trainerGUID)
   defenderPokemon.model_GUID = gymData.pokemon[1].model_GUID
   defenderPokemon.pokemonGUID = params.trainerGUID
+  defenderPokemon.teraActive = gymData.pokemon[1].teraActive
+  defenderPokemon.teraType = gymData.pokemon[1].teraType
   defenderPokemon.pokemon2 = pokemonData[2]
   defenderPokemon.pokemon2.pokemonGUID = params.trainerGUID
   defenderPokemon.pokemon2.model_GUID = gymData.pokemon[2].model_GUID
+  defenderPokemon.pokemon2.teraActive = gymData.pokemon[2].teraActive
+  defenderPokemon.pokemon2.teraType = gymData.pokemon[2].teraType
 
   -- Check if this Gym Leader gets a booster.
   local booster_chance = Global.call("getBoostersChance")
@@ -3669,7 +3099,7 @@ function sendToArenaGym(params)
     gymLeaderGuid = gymData.guid
 
     -- Move the button.
-    self.editButton({index=16, position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="recallGymLeader", label="RECALL", tooltip="Recall Gym Leader"})
+    edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, 0.4, recallDefPos.z}, click_function="recallGymLeader", label="RECALL", tooltip="Recall Gym Leader"})
   end
 
   if Global.call("get_models_enabled") then
@@ -3761,22 +3191,10 @@ function sendToArenaGym(params)
     2
   )
 
-  if scriptingEnabled then
-    defenderData.attackValue.level = defenderPokemon.baseLevel
-    updateAttackValueCounter(DEFENDER)
-
-    aiDifficulty = Global.call("GetAIDifficulty")
-
-    defenderConfirmed = true
-    if attackerConfirmed then
-      startBattle()
-    end
-  else
-    showAutoRollButtons(true)
-    showFlipGymButton(true)
-    showConfirmButton(DEFENDER, "RANDOM MOVE")
-    moveStatusButtons(true)
-  end
+  showAutoRollButtons(true)
+  showFlipGymButton(true)
+  showRandomMoveButton(DEFENDER)
+  moveStatusButtons(true)
 
   -- Check if HP Rule 2 is enabled.
   if Global.call("getHpRule2Set") then
@@ -3787,12 +3205,13 @@ function sendToArenaGym(params)
   return true
 end
 
+-- Recalls gym leader.
 function recallGymLeader()
   -- Confirm we at least have a Gym Leader GUID.
   if not gymLeaderGuid then return end
 
   -- Remove the button.
-  self.editButton({index=16, position={recallDefPos.x, 1000, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
+  edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, 1000, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
 
   -- Get a handle on the appropriate gym.
   local gym = getObjectFromGUID(defenderData.gymGUID)
@@ -3812,6 +3231,7 @@ function recallGymLeader()
   moveStatusButtons(false)
 end
 
+-- Sends to arena trainer params supplies inputs.
 function sendToArenaTrainer(params)
   if attackerData.type ~= nil then
     print("There is already a Pokémon in the arena")
@@ -3825,9 +3245,9 @@ function sendToArenaTrainer(params)
 
   -- Update the buttons for the trainer battle. If this is second trainer fight, there is no need for a NEXT button. However, if users mix the two
   -- recall buttons then this button can get out of sync.
-  self.editButton({index=2, position={recallAtkPos.x, 0.4, recallAtkPos.z}, click_function="recallTrainerHook", label="RECALL", tooltip="Recall Trainer"})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 0.4, recallAtkPos.z}, click_function="recallTrainerHook", label="RECALL", tooltip="Recall Trainer"})
   if not isSecondTrainer then
-    self.editButton({index=41, position={rivalFlipButtonPos.x, 0.4, rivalFlipButtonPos.z}, click_function="nextTrainerBattle", label="NEXT", tooltip="Next Trainer Fight"})
+    edit_button(BUTTON_ID.nextRival, { position={rivalFlipButtonPos.x, 0.4, rivalFlipButtonPos.z}, click_function="nextTrainerBattle", label="NEXT", tooltip="Next Trainer Fight"})
   end
 
   -- Trainer Pokemon.
@@ -3854,25 +3274,13 @@ function sendToArenaTrainer(params)
 
   -- Add the status buttons.
   showAtkStatusButtons(true)
-
-   if scriptingEnabled then
-      attackerData.attackValue.level = attackerPokemon.baseLevel
-      updateAttackValueCounter(ATTACKER)
-
-      aiDifficulty = Global.call("GetAIDifficulty")
-
-      attackerConfirmed = true
-      if defenderConfirmed then
-        startBattle()
-      end
-  else
-    local numMoves = #attackerPokemon.moves
-    if numMoves > 1 then
-      showConfirmButton(ATTACKER, "RANDOM MOVE")
-    end
-    showAutoRollButtons(true)
-    moveStatusButtons(true)
+  
+  local numMoves = #attackerPokemon.moves
+  if numMoves > 1 then
+    showRandomMoveButton(ATTACKER)
   end
+  showAutoRollButtons(true)
+  moveStatusButtons(true)
 
   if Global.call("get_models_enabled") then
     -- Since the trainers use normal tokens we can relay on normal model logic except that it will be 
@@ -3904,6 +3312,7 @@ function sendToArenaTrainer(params)
   return true
 end
 
+-- Sends to arena rival params supplies inputs.
 function sendToArenaRival(params)
   if attackerData.type ~= nil then
     print("There is already a Pokémon in the arena")
@@ -3934,6 +3343,7 @@ function sendToArenaRival(params)
   -- TODO: Becaise of how Wait.condition() works, this is likely pointless.
   if rivalCard == nil then
     print("Failed to fetch rival " .. params.trainerName)
+    return
   end
 
   -- Update battle state.
@@ -3942,7 +3352,7 @@ function sendToArenaRival(params)
   printToAll("Rival " .. params.trainerName .. " wants to fight!", {r=246/255, g=192/255, b=15/255})
 
   -- Move the button.
-  self.editButton({index=2, position={recallAtkPos.x, 0.4, recallAtkPos.z}, click_function="recallRivalHook", label="RECALL", tooltip="Recall Rival"})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 0.4, recallAtkPos.z}, click_function="recallRivalHook", label="RECALL", tooltip="Recall Rival"})
   promptGymLeaderControl("Rival")
   
   -- Update pokemon info.
@@ -4050,7 +3460,7 @@ function sendToArenaRival(params)
   -- Update a few buttons.
   showAutoRollButtons(true)
   showFlipRivalButton(true)
-  showConfirmButton(ATTACKER, "RANDOM MOVE")
+  showRandomMoveButton(ATTACKER)
   moveStatusButtons(true)
 
   -- Check if HP Rule 2 is enabled.
@@ -4062,10 +3472,11 @@ function sendToArenaRival(params)
   return true
 end
 
+-- Recalls trainer params supplies inputs.
 function recallTrainer(params)
   -- Remove both buttons.
-  self.editButton({index=2, position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
-  self.editButton({index=41, position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
+  edit_button(BUTTON_ID.nextRival, { position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
 
   local trainerPokemon = getObjectFromGUID(attackerPokemon.pokemonGUID)
 
@@ -4076,11 +3487,9 @@ function recallTrainer(params)
   text = getObjectFromGUID(atkText)
   text.setValue(" ")
 
-  if scriptingEnabled == false then
-    hideConfirmButton(ATTACKER)
-    showAutoRollButtons(false)
-    moveStatusButtons(false)
-  end
+  hideRandomMoveButton(ATTACKER)
+  showAutoRollButtons(false)
+  moveStatusButtons(false)
 
   -- Remove status card if it is present.
   if defenderPokemon and defenderPokemon.status ~= nil then
@@ -4094,28 +3503,17 @@ function recallTrainer(params)
   end
 
   -- Detect status cards and tokens. Trainers can delete them.
-  local status_table = detectStatusCardAndTokens(ATTACKER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  removeStatusAndTokens(ATTACKER)
 
   -- Add the status buttons.
   showAtkStatusButtons(false)
-
+  showMoveDisableButtons(ATTACKER, false)
   showAttackerTeraButton(false)
   clearPokemonData(ATTACKER)
   clearTrainerData(ATTACKER)
 end
 
+-- Recalls gym.
 function recallGym()
   -- Reformat the data so that the model code can use it. (Sorry, I know this is hideous.) This is extra gross because
   -- I didn't feel like figuring out to fake allllll of the initialization process for GymData models that may 
@@ -4186,12 +3584,10 @@ function recallGym()
     end
   end
 
-  if scriptingEnabled == false then
-    showFlipGymButton(false)
-    hideConfirmButton(DEFENDER)
-    showAutoRollButtons(false)
-    moveStatusButtons(false)
-  end
+  showFlipGymButton(false)
+  hideRandomMoveButton(DEFENDER)
+  showAutoRollButtons(false)
+  moveStatusButtons(false)
 
   -- Remove the status if it is present.
   if defenderPokemon and defenderPokemon.status ~= nil then
@@ -4210,19 +3606,7 @@ function recallGym()
   end
 
   -- Detect status cards and tokens. Gym Leaders can delete them.
-  local status_table = detectStatusCardAndTokens(DEFENDER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  removeStatusAndTokens(DEFENDER)
 
   -- Add the status buttons.
   showDefStatusButtons(false)
@@ -4236,6 +3620,7 @@ function recallGym()
   clearMoveText(DEFENDER)
 end
 
+-- Recalls rival.
 function recallRival()
   -- Get the active model GUID. This prevents despawning the wrong model.
   local model_guid = Global.call("get_model_guid", attackerPokemon.pokemonGUID)
@@ -4295,11 +3680,9 @@ function recallRival()
     removeStatus(attackerPokemon)
   end
 
-  if scriptingEnabled == false then
-    hideConfirmButton(ATTACKER)
-    showAutoRollButtons(false)
-    moveStatusButtons(false)
-  end
+  hideRandomMoveButton(ATTACKER)
+  showAutoRollButtons(false)
+  moveStatusButtons(false)
 
   -- Check if we had a Booster and discard it.
   if attackerData.boosterGuid ~= nil then
@@ -4314,18 +3697,7 @@ function recallRival()
 
   -- Detect status cards and tokens. Gym Leaders can delete them.
   local status_table = detectStatusCardAndTokens(ATTACKER)
-  if status_table.status_guid then
-    local status_card = getObjectFromGUID(status_table.status_guid)
-    if status_card then
-      destroyObject(status_card)
-    end
-  end
-  if status_table.tokens_guid then
-    local tokens = getObjectFromGUID(status_table.tokens_guid)
-    if tokens then
-      destroyObject(tokens)
-    end
-  end
+  removeStatusAndTokens(ATTACKER)
 
   clearPokemonData(ATTACKER)
   clearTrainerData(ATTACKER)
@@ -4351,7 +3723,7 @@ function recallRivalHook()
   end
 
   -- Remove the button.
-  self.editButton({index=2, position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
 
   -- Recall the Gym Leader.
   rivalEventPokeball.call("recall")
@@ -4361,8 +3733,8 @@ end
 -- The Pokeball recall function then calls recallTrainer(). :D
 function recallTrainerHook()
   -- Remove both buttons.
-  self.editButton({index=2, position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
-  self.editButton({index=41, position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
+  edit_button(BUTTON_ID.nextRival, { position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
 
   -- Update the isSecondTrainer flag.
   isSecondTrainer = false
@@ -4388,7 +3760,7 @@ end
 -- battles.
 function nextTrainerBattle()
   -- Hide this button, since there is only ever a Trainer Battle (2) at most.
-  self.editButton({index=41, position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
+  edit_button(BUTTON_ID.nextRival, { position={rivalFlipButtonPos.x, 1000, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
 
   -- Update the isSecondTrainer flag.
   isSecondTrainer = true
@@ -4396,7 +3768,7 @@ function nextTrainerBattle()
   -- Check if we at least have a pokeball GUID.
   if not attackerData or not attackerData.pokeballGUID then
     -- Failed to recall like this. Remove the button and have the user recall normally.
-    self.editButton({index=2, position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
+    edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, 1000, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL", tooltip=""})
 
     print("Unknown home for this Pokémon. You need to recall it conventionally. :(")
     return
@@ -4416,6 +3788,7 @@ function nextTrainerBattle()
   Wait.time(function() pokeball.call("battle") end, 0.3)
 end
 
+-- Sends to arena params supplies inputs.
 function sendToArena(params)
     local isAttacker = params.isAttacker
     local arenaData = isAttacker and attackerPokemon or defenderPokemon
@@ -4630,9 +4003,7 @@ function sendToArena(params)
     end
     updateAttackValueCounter(params.isAttacker)
 
-    if scriptingEnabled then
-      showConfirmButton(params.isAttacker, "CONFIRM")
-    elseif attackerPokemon ~= nil and defenderPokemon ~= nil and inBattle == false then
+    if attackerPokemon ~= nil and defenderPokemon ~= nil and inBattle == false then
       inBattle = true
       Global.call("PlayTrainerBattleMusic",{})
     end
@@ -4667,6 +4038,7 @@ function sendToArena(params)
     clearMoveText(DEFENDER)
 end
 
+-- Sets trainer type isAttacker selects attacker/defender. params supplies inputs.
 function setTrainerType(isAttacker, type, params)
 
   clearTrainerData(isAttacker)
@@ -4693,6 +4065,7 @@ function setTrainerType(isAttacker, type, params)
   end
 end
 
+-- Resets trainer data isAttacker selects attacker/defender.
 function resetTrainerData(isAttacker)
 
   if isAttacker then
@@ -4712,6 +4085,7 @@ function resetTrainerData(isAttacker)
   data.attackValue = copyTable(DEFAULT_ARENA_DATA.attackValue)
 end
 
+-- Clears trainer data isAttacker selects attacker/defender.
 function clearTrainerData(isAttacker)
 
   if isAttacker then
@@ -4724,12 +4098,8 @@ function clearTrainerData(isAttacker)
 end
 
 
+-- Recalls recall params supplies inputs.
 function recall(params)
-    if scriptingEnabled and battleState ~= SELECT_POKEMON and battleState ~= NO_BATTLE then
-      printToAll("Cannot recall pokemon in the middle of a battle")
-      return
-    end
-
     local isAttacker = params.isAttacker
     local rack = getObjectFromGUID(params.rackGUID)
     local pokemonData = isAttacker and attackerPokemon or defenderPokemon
@@ -4893,12 +4263,6 @@ function recall(params)
     showAutoRollButtons(false)
     moveStatusButtons(false)
 
-    if battleState ~= NO_BATTLE then
-      showConfirmButton(isAttacker, "FORFEIT")
-    else
-      hideConfirmButton(isAttacker)
-    end
-
     -- Clear move texts.
     clearMoveText(ATTACKER)
     clearMoveText(DEFENDER)
@@ -4955,6 +4319,25 @@ function detectStatusCardAndTokens(isAttacker)
   return status_table
 end
 
+-- Helper function to detect and delete status cards and tokens.
+function removeStatusAndTokens(isAttacker)
+  -- Detect status cards and tokens.
+  local status_table = detectStatusCardAndTokens(isAttacker)
+  if status_table.status_guid then
+    local status_card = getObjectFromGUID(status_table.status_guid)
+    if status_card then
+      destroyObject(status_card)
+    end
+  end
+  if status_table.tokens_guid then
+    local tokens = getObjectFromGUID(status_table.tokens_guid)
+    if tokens then
+      destroyObject(tokens)
+    end
+  end
+end
+
+-- Clears pokemon data isAttacker selects attacker/defender.
 function clearPokemonData(isAttacker)
   if isAttacker then
       showAtkButtons(false)
@@ -4980,21 +4363,10 @@ function clearPokemonData(isAttacker)
 
   -- Clear the attack counter even without scripting.
   clearAttackCounter(isAttacker)
-
-  if scriptingEnabled then
-    clearDice(isAttacker)
-
-    if battleState ~= NO_BATTLE then
-      setBattleState(SELECT_POKEMON)
-    end
-  end
 end
 
+-- Ends battle.
 function endBattle()
-  -- if battleState == NO_BATTLE and scriptingEnabled then
-  --   return
-  -- end
-
   printToAll("Battle Ended", "Red")
 
   showAttackerTeraButton(false)
@@ -5006,7 +4378,6 @@ function endBattle()
   clearTrainerData(DEFENDER)
 
   setRound(0)
-  setBattleState(NO_BATTLE)
 
   if inBattle then
     Global.call("PlayRouteMusic")
@@ -5017,6 +4388,7 @@ function endBattle()
   despawnAutoRollDice()
 end
 
+-- Sets round.
 function setRound(round)
   currRound = round
   local roundTextfield = getObjectFromGUID(roundText)
@@ -5028,6 +4400,7 @@ function setRound(round)
   end
 end
 
+-- Clears dice isAttacker selects attacker/defender.
 function clearDice(isAttacker)
   local diceTable = isAttacker and attackerData.dice or defenderData.dice
 
@@ -5038,12 +4411,14 @@ function clearDice(isAttacker)
   end
 end
 
+-- Updates moves isAttacker selects attacker/defender.
 function updateMoves(isAttacker, data, cardMoveData)
   hideArenaMoveButtons(isAttacker)
   showMoveButtons(isAttacker, cardMoveData)
   updateTypeEffectiveness()
 end
 
+-- Updates type effectiveness.
 function updateTypeEffectiveness()
   if attackerPokemon == nil or defenderPokemon == nil then
     return
@@ -5080,6 +4455,7 @@ function updateTypeEffectiveness()
   calculateEffectiveness(DEFENDER, defenderPokemon.movesData, defenderStellar, attackerPokemon.types, attackerTera)
 end
 
+-- Calculates effectiveness isAttacker selects attacker/defender.
 function calculateEffectiveness(isAttacker, moves, is_stellar, opponent_types, opponent_tera_type)
   local opponentData = nil
   if isAttacker then
@@ -5099,7 +4475,7 @@ function calculateEffectiveness(isAttacker, moves, is_stellar, opponent_types, o
   -- Shedinja check -- Wonder Guard. We will skip this if not playing with dualtype AND immunities.
   local opponent_is_shedinja_immune = (opponentData.name == "Shedinja") and Global.call("getImmunitiesEnabled") and Global.call("getDualTypeEffectiveness")
   if opponent_is_shedinja_immune then
-    printToAll("Shedinja’s mysterious power only let Supereffective moves hit the Pokémon.")
+    printToAll("Shedinja's mysterious power only lets effective moves hit it.")
   end
 
   for i=1, 4 do
@@ -5111,7 +4487,7 @@ function calculateEffectiveness(isAttacker, moves, is_stellar, opponent_types, o
 
       local xPos = -33.98 - (buttonWidths * 0.5)
       moveText.setPosition({xPos + (3.75*(i-1)), 1, textZPos})
-      moveData.status = DEFAULT
+      moveData.status = moves[i].status or DEFAULT
 
       -- If this move is Judgement we need to change the type if there is a Type Enhancer.
       if moveData.name == "Judgement" then
@@ -5122,103 +4498,116 @@ function calculateEffectiveness(isAttacker, moves, is_stellar, opponent_types, o
         end
       end
 
-      if canUseMoves == false then
+      if moveData.status == DISABLED then
+        moveText.TextTool.setValue("Disabled")
+        moveData.status = DISABLED
+      elseif canUseMoves == false then
         moveText.TextTool.setValue("Disabled")
         moveData.status = DISABLED
       else
-        -- If move had NEUTRAL effect, don't calculate Effectiveness
-        local calculateEffectiveness = true
+        -- If move had NEUTRAL effect, don't calculate effectiveness at all.
+        local is_neutral = false
         if moveData.effects ~= nil then
           for k=1, #moveData.effects do
-              if moveData.effects[k].name == status_ids.neutral then
-                calculateEffectiveness = false
-
-                -- Still calculate if it is actually Immune though.
-                local tempEffectivenessScore = getEffectivenessScore(moveData, opponent_tera_type, opponent_types)
-                if tempEffectivenessScore ~= IMMUNE then
-                  moveText.TextTool.setValue("Neutral")
-                else
-                  moveText.TextTool.setValue("Immune")
-                  moveData.status = IMMUNE
-                end
-                break
-              end
+            if moveData.effects[k].name == status_ids.neutral then
+              is_neutral = true
+              moveText.TextTool.setValue("Neutral")
+              break
+            end
           end
         end
-        -- If a Pokemon is Stellar TeraTyped, they don't get effectiveness.
-        if is_stellar then
-          calculateEffectiveness = false
-          
-          -- Still calculate if it is actually Immune though.
-          local tempEffectivenessScore = getEffectivenessScore(moveData, opponent_tera_type, opponent_types)
-          if tempEffectivenessScore ~= IMMUNE then
+
+        if not is_neutral then
+          -- If a Pokemon is Stellar TeraTyped, they don't get effectiveness.
+          local calculateEffectiveness = true
+          if is_stellar then
+            calculateEffectiveness = false
             moveText.TextTool.setValue("Neutral")
-          else
-            moveText.TextTool.setValue("Immune")
-            moveData.status = IMMUNE
-          end
-        end
-
-        if calculateEffectiveness then
-          local effectiveness_score = getEffectivenessScore(moveData, opponent_tera_type, opponent_types)
-
-          -- When teratyping into the secondary type, it can cause Super-Effective/Weak. We don't want that.
-          if Global.call("getDualTypeEffectiveness") and opponent_types[1] == opponent_types[2] then
-            if effectiveness_score == 4 then
-              effectiveness_score = 2
-            elseif effectiveness_score == -4 then
-              effectiveness_score = -2
-            end
           end
 
-          -- If this move is Flying Press, check which label to use.
-          if moveData.name == "Flying Press" then
-            -- Determine the effectiveness when Flying type.
-            local tempMoveDataFlying = copyTable(moveData)
-            tempMoveDataFlying.type = "Flying"
-            local tempEffectivenessScore = getEffectivenessScore(tempMoveDataFlying, opponent_tera_type, opponent_types)
+          if calculateEffectiveness then
+            local effectiveness_score = getEffectivenessScore(moveData, opponent_tera_type, opponent_types)
 
-            -- Determine which effectiveness to keep.
-            if tempEffectivenessScore > effectiveness_score then
-              effectiveness_score = tempEffectivenessScore
+            -- When teratyping into the secondary type, it can cause Super-Effective/Weak. We don't want that.
+            if Global.call("getDualTypeEffectiveness") and opponent_types[1] == opponent_types[2] then
+              if effectiveness_score == 4 then
+                effectiveness_score = 2
+              elseif effectiveness_score == -4 then
+                effectiveness_score = -2
+              end
             end
-          end
 
-          -- Use the effectiveness score.
-          if not opponent_is_shedinja_immune then
-            if effectiveness_score == 4 then 
-              moveText.TextTool.setValue("Super-Effective")
-              moveData.status = SUPER_EFFECTIVE
-            elseif effectiveness_score == 2 then 
-              moveText.TextTool.setValue("Effective")
-              moveData.status = EFFECTIVE
-            elseif effectiveness_score == -2 then 
-              moveText.TextTool.setValue("Weak")
-              moveData.status = WEAK
-            elseif effectiveness_score == -4 then 
-              moveText.TextTool.setValue("Super-Weak")
-              moveData.status = SUPER_WEAK
-            elseif effectiveness_score == IMMUNE then
-              moveText.TextTool.setValue("Immune")
-              moveData.status = IMMUNE
+            -- If this move is Flying Press, check which label to use.
+            if moveData.name == "Flying Press" then
+              -- Determine the effectiveness when Flying type.
+              local tempMoveDataFlying = copyTable(moveData)
+              tempMoveDataFlying.type = "Flying"
+              local tempEffectivenessScore = getEffectivenessScore(tempMoveDataFlying, opponent_tera_type, opponent_types)
+
+              -- Determine which effectiveness to keep.
+              if tempEffectivenessScore > effectiveness_score then
+                effectiveness_score = tempEffectivenessScore
+              end
             end
-          else
-            -- Shedinja immunities to deal with.
-            if effectiveness_score == 4 then 
-              moveText.TextTool.setValue("Super-Effective")
-              moveData.status = SUPER_EFFECTIVE
-            elseif effectiveness_score == 2 then 
-              moveText.TextTool.setValue("Effective")
-              moveData.status = EFFECTIVE
+
+            -- Use the effectiveness score.
+            if not opponent_is_shedinja_immune then
+              if effectiveness_score == 4 then 
+                moveText.TextTool.setValue("Super-Effective")
+                moveData.status = SUPER_EFFECTIVE
+              elseif effectiveness_score == 2 then 
+                moveText.TextTool.setValue("Effective")
+                moveData.status = EFFECTIVE
+              elseif effectiveness_score == -2 then 
+                moveText.TextTool.setValue("Weak")
+                moveData.status = WEAK
+              elseif effectiveness_score == -4 then 
+                moveText.TextTool.setValue("Super-Weak")
+                moveData.status = SUPER_WEAK
+              elseif effectiveness_score == IMMUNE then
+                moveText.TextTool.setValue("Immune")
+                moveData.status = IMMUNE
+              end
             else
-              moveText.TextTool.setValue("Immune")
-              moveData.status = IMMUNE
+              -- Shedinja immunities to deal with.
+              if effectiveness_score == 4 then 
+                moveText.TextTool.setValue("Super-Effective")
+                moveData.status = SUPER_EFFECTIVE
+              elseif effectiveness_score == 2 then 
+                moveText.TextTool.setValue("Effective")
+                moveData.status = EFFECTIVE
+              else
+                moveText.TextTool.setValue("Immune")
+                moveData.status = IMMUNE
+              end
             end
           end
         end
       end
     end
   end
+end
+
+local function moveHasEffect(moveData, effectName)
+  if not moveData.effects then return false end
+  for i=1, #moveData.effects do
+    if moveData.effects[i].name == effectName then
+      return true
+    end
+  end
+  return false
+end
+
+local function getSaltCureEffectivenessBonus(moveData, opponent_types, type_length)
+  if not moveHasEffect(moveData, status_ids.saltCure) then return 0 end
+  local bonus = 0
+  for type_index = 1, type_length do
+    local opp_type = opponent_types[type_index]
+    if opp_type == "Steel" or opp_type == "Water" then
+      bonus = bonus + 2
+    end
+  end
+  return bonus
 end
 
 -- Helper function used to get the effectiveness score of a move.
@@ -5266,20 +4655,13 @@ function getEffectivenessScore(moveData, opponent_tera_type, opponent_types)
     end
   end
 
+  -- Salt Cure is additionally effective against Steel and Water types.
+  effectiveness_score = effectiveness_score + getSaltCureEffectivenessBonus(moveData, opponent_types, type_length)
+
   return effectiveness_score
 end
 
-function isAITrainer(isAttacker)
-  local type = isAttacker and attackerType or defenderType
-  if aiDifficulty > 0 and type == GYM then
-    return true
-  elseif aiDifficulty > 0 and type == TRAINER then
-    return true
-  else
-    return false
-  end
-end
-
+-- Handles copy table.
 function copyTable(original)
   local copy = {}
 	for k, v in pairs(original) do
@@ -5291,6 +4673,7 @@ function copyTable(original)
 	return copy
 end
 
+-- Handles adjust attack value counter isAttacker selects attacker/defender.
 function adjustAttackValueCounter(isAttacker, adjustment)
   if not adjustment then return end
   local counterGUID = nil
@@ -5305,6 +4688,7 @@ function adjustAttackValueCounter(isAttacker, adjustment)
   counter.Counter.setValue(value + adjustment)
 end
 
+-- Updates attack value counter isAttacker selects attacker/defender.
 function updateAttackValueCounter(isAttacker)
   -- Init some values.
   local atkVal = nil
@@ -5447,6 +4831,7 @@ function updateAttackValueCounter(isAttacker)
   counter.Counter.setValue(totalAttack)
 end
 
+-- Returns attack value counter value isAttacker selects attacker/defender.
 function getAttackValueCounterValue(isAttacker)
   local counterGUID = nil
   if isAttacker then
@@ -5459,17 +4844,22 @@ function getAttackValueCounterValue(isAttacker)
   return counter.Counter.getValue()
 end
 
+-- Clears attack counter isAttacker selects attacker/defender.
 function clearAttackCounter(isAttacker)
   local counterGUID = isAttacker and atkCounter or defCounter
   local counter = getObjectFromGUID(counterGUID)
   counter.Counter.setValue(0)
 end
 
+-- Sets level params supplies inputs.
 function setLevel(params)
   local slotData = params.slotData
   if params.modifier == 0 then
       return slotData
   end
+
+  local levelIncreaseSet = Global.call("getLevelIncreaseSet")
+  local maxLevel = levelIncreaseSet and 20 or 6
 
   -- Get current Level from the dice
   local diceLevel = 0
@@ -5486,7 +4876,7 @@ function setLevel(params)
 
   if newDiceLevel < 0 then
     return slotData
-  elseif diceLevel == 6 and params.modifier > 0 then
+  elseif diceLevel >= maxLevel and params.modifier > 0 then
     print("Pokémon at maximum level")
     return slotData
   end
@@ -5538,6 +4928,7 @@ function setLevel(params)
   return slotData
 end
 
+-- Updates evolve buttons params supplies inputs.
 function updateEvolveButtons(params, slotData, level)
   -- Check if we have even started the game yet. <.<
   local starterPokeball = getObjectFromGUID("ec1e4b")
@@ -5610,6 +5001,7 @@ function updateEvolveButtons(params, slotData, level)
   end
 end
 
+-- Evolves poke params supplies inputs.
 function evolvePoke(params)
     -- Check if we have even started the game yet. <.<
     local starterPokeball = getObjectFromGUID("ec1e4b")
@@ -5942,6 +5334,7 @@ function evolvePoke(params)
     end
 end
 
+-- Refreshes pokemon params supplies inputs.
 function refreshPokemon(params)
     local xPos
     local startIndex = 0
@@ -6043,6 +5436,7 @@ function refreshPokemon(params)
     return updatedRackData
 end
 
+-- Sets new pokemon.
 function setNewPokemon(data, newPokemonData, pokemonGUID, preserveTera)
   -- Save off existing Tera data if this is an evolution in the arena.
   local new_teraType = nil
@@ -6100,6 +5494,7 @@ function setNewPokemon(data, newPokemonData, pokemonGUID, preserveTera)
   end
 end
 
+-- Clears move text isAttacker selects attacker/defender.
 function clearMoveText(isAttacker)
   if isAttacker then
     -- Clear text.
@@ -6109,8 +5504,12 @@ function clearMoveText(isAttacker)
     local defenderText = getObjectFromGUID(defText)
     defenderText.TextTool.setValue(" ")
   end
+
+  -- Remove movoe Disable buttons, if they were present.
+  showMoveDisableButtons(isAttacker, false)
 end
 
+-- Handles calc points params supplies inputs.
 function calcPoints(params)
 
     if Player[params.rackColour].steam_name == nil then return end
@@ -6146,12 +5545,55 @@ function calcPoints(params)
 end
 
 
+-- Updates level dice params supplies inputs.
 function updateLevelDice(level, newLevel, params, levelDice)
+
+  -- Applies level dice style.
+  local function applyLevelDiceStyle(dice)
+    if not dice then
+      return
+    end
+    if dice.setColorTint then
+      dice.setColorTint({r=0, g=0, b=0})
+    end
+  end
+
+  -- Sets d 6 value.
+  local function setD6Value(dice, value, yRotation)
+    if value == 1 then
+      dice.setRotation({270,yRotation,0})
+    elseif value == 2 then
+      dice.setRotation({0,yRotation,0})
+    elseif value == 3 then
+      dice.setRotation({0,yRotation,270})
+    elseif value == 4 then
+      dice.setRotation({0,yRotation,90})
+    elseif value == 5 then
+      dice.setRotation({0,yRotation,180})
+    elseif value == 6 then
+      dice.setRotation({90,yRotation,0})
+    end
+  end
+
+  -- Returns dice sides.
+  local function getDiceSides(dice)
+    if not dice or not dice.getRotationValues then
+      return nil
+    end
+    local rotationValues = dice.getRotationValues()
+    if rotationValues then
+      return #rotationValues
+    end
+    return nil
+  end
+
+  local useD20 = Global.call("getLevelIncreaseSet")
+  local diceType = useD20 and "Die_20" or "Die_6"
 
   local yRotation = params.inArena and 0 or params.yRotRecall
   if level == 0 then -- Add level dice to board
-    local diceBag = getObjectFromGUID(params.diceBagGUID)
-    local dice = diceBag.takeObject()
+    local dice = spawnObject({ type = diceType })
+    applyLevelDiceStyle(dice)
     local dicePos
 
     if params.inArena then
@@ -6162,7 +5604,16 @@ function updateLevelDice(level, newLevel, params, levelDice)
       dicePos = rack.positionToWorld({params.pokemonXPos[params.index] - levelDiceXOffset, 0.75, params.pokemonZPos - levelDiceZOffset})
     end
     dice.setPosition(dicePos)
-    dice.setRotation({270,yRotation,0})
+    if useD20 then
+      dice.setRotation({0,yRotation,0})
+      if dice.setValue then
+        dice.setValue(newLevel)
+      elseif dice.setRotationValue then
+        dice.setRotationValue(newLevel)
+      end
+    else
+      setD6Value(dice, newLevel, yRotation)
+    end
     return dice.getGUID()
   elseif levelDice ~= nil then -- Rotate level dice to correct level
     if newLevel == 0 then
@@ -6170,24 +5621,30 @@ function updateLevelDice(level, newLevel, params, levelDice)
         Wait.time(destroyObj, 0.25)
         return nil
     else
-      if newLevel == 1 then
-        levelDice.setRotation({270,yRotation,0})
-      elseif newLevel == 2 then
-        levelDice.setRotation({0,yRotation,0})
-      elseif newLevel == 3 then
-        levelDice.setRotation({0,yRotation,270})
-      elseif newLevel == 4 then
-        levelDice.setRotation({0,yRotation,90})
-      elseif newLevel == 5 then
-        levelDice.setRotation({0,yRotation,180})
-      elseif newLevel == 6 then
-        levelDice.setRotation({90,yRotation,0})
+      applyLevelDiceStyle(levelDice)
+      if useD20 then
+        local sides = getDiceSides(levelDice)
+        if sides ~= 20 then
+          local dicePos = levelDice.getPosition()
+          local diceRot = levelDice.getRotation()
+          levelDice.destruct()
+          levelDice = spawnObject({ type = "Die_20", position = dicePos, rotation = diceRot })
+          applyLevelDiceStyle(levelDice)
+        end
+        if levelDice.setValue then
+          levelDice.setValue(newLevel)
+        elseif levelDice.setRotationValue then
+          levelDice.setRotationValue(newLevel)
+        end
+      else
+        setD6Value(levelDice, newLevel, yRotation)
       end
       return levelDice.getGUID()
     end
   end
 end
 
+-- Adds status counter params supplies inputs.
 function addStatusCounter(params)
   local counterParam = {}
   local counterPos = params.arenaAttack and attackerPos or defenderPos
@@ -6203,6 +5660,7 @@ function addStatusCounter(params)
   data.numStatusCounters = data.numStatusCounters + 1
 end
 
+-- Removes status counter isAttacker selects attacker/defender.
 function removeStatusCounter(isAttacker)
 
   local castParam = {}
@@ -6286,6 +5744,7 @@ function getPokemonNameInPlay(isAttacker)
   local pokemon = isAttacker and attackerPokemon or defenderPokemon
   if data == nil or pokemon == nil then return "Unknown Pokémon" end
 
+  -- Handles name from roster.
   local function nameFromRoster(index)
     return data.pokemon and data.pokemon[index] and data.pokemon[index].name
   end
@@ -6305,6 +5764,7 @@ function getPokemonNameInPlay(isAttacker)
   end
 end
 
+-- Event handler for object enter scripting zone.
 function onObjectEnterScriptingZone(zone, object)
   -- Collect some information.
   local zone_guid = zone.getGUID()
@@ -6333,6 +5793,17 @@ function onObjectEnterScriptingZone(zone, object)
       end
     end
   elseif zone_guid == defenderZones.status then
+    local keep_status, applied_status = tryApplyStatusFromZone(DEFENDER, object)
+    if keep_status == nil then return end
+    if not keep_status then
+      returnStatusCardToBag(object_name, object)
+      return
+    end
+
+    if not applied_status then
+      return
+    end
+
     -- Print out the status.
     announceStatus(object_name, getPokemonNameInPlay(DEFENDER))
 
@@ -6349,6 +5820,7 @@ function onObjectEnterScriptingZone(zone, object)
         attackerData.attackValue.effect = 1
         local pokemon_name = getPokemonNameInPlay(ATTACKER)
         printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
+        updateAttackValueCounter(ATTACKER)
       end
     end
   elseif zone_guid == defenderZones.fieldEffect then
@@ -6374,6 +5846,17 @@ function onObjectEnterScriptingZone(zone, object)
     announceFieldEffect(active_effect, ATTACKER)
     atkFieldEffect = {name=active_effect, guid=object.getGUID()}
   elseif zone_guid == attackerZones.status then
+    local keep_status, applied_status = tryApplyStatusFromZone(ATTACKER, object)
+    if keep_status == nil then return end
+    if not keep_status then
+      returnStatusCardToBag(object_name, object)
+      return
+    end
+
+    if not applied_status then
+      return
+    end
+
     -- Print out the status.
     announceStatus(object_name, getPokemonNameInPlay(ATTACKER))
 
@@ -6390,6 +5873,7 @@ function onObjectEnterScriptingZone(zone, object)
         defenderData.attackValue.effect = 1
         local pokemon_name = getPokemonNameInPlay(DEFENDER)
         printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
+        updateAttackValueCounter(DEFENDER)
       end
     end
   elseif zone_guid == attackerZones.battleCard then
@@ -6409,6 +5893,7 @@ function onObjectEnterScriptingZone(zone, object)
   end
 end
 
+-- Event handler for object leave scripting zone.
 function onObjectLeaveScriptingZone(zone, object)
   -- Collect some information.
   local zone_guid = zone.getGUID()
@@ -6419,9 +5904,16 @@ function onObjectLeaveScriptingZone(zone, object)
     showWildPokemonButton(false)
   elseif zone_guid == defenderZones.battleCard then
     -- Set the Defender's Booster attack value to 0.
+    local existingVal = defenderData.attackValue.booster
     defenderData.attackValue.booster = 0
-    updateAttackValueCounter(DEFENDER)
+    if existingVal > 0 then
+      updateAttackValueCounter(DEFENDER)
+    end
   elseif zone_guid == defenderZones.status then
+    if not (object.hasTag("Status") and is_status_card_name(object_name)) then
+      return
+    end
+
     -- Set the Defender's Status attack value to 0.
     defenderData.attackValue.status = 0
     -- Remove the status.
@@ -6436,6 +5928,10 @@ function onObjectLeaveScriptingZone(zone, object)
   elseif zone_guid == attackerZones.fieldEffect then
     atkFieldEffect = {name=nil, guid=nil}
   elseif zone_guid == attackerZones.status then
+    if not (object.hasTag("Status") and is_status_card_name(object_name)) then
+      return
+    end
+
     -- Set the Attacker's Status attack value to 0.
     attackerData.attackValue.status = 0
     -- Remove the status.
@@ -6447,8 +5943,11 @@ function onObjectLeaveScriptingZone(zone, object)
     end
   elseif zone_guid == attackerZones.battleCard then
     -- Set the Attacker's Booster attack value to 0.
+    local existingVal = attackerData.attackValue.booster
     attackerData.attackValue.booster = 0
-    updateAttackValueCounter(ATTACKER)
+    if existingVal > 0 then
+      updateAttackValueCounter(ATTACKER)
+    end
   end
 end
 
@@ -6560,6 +6059,7 @@ function showRackSlotButtons(params)
     rack.editButton({index=buttonIndex+3, position={params.xPos + 0.34, params.yLoc, 0.02}}) -- Level Up Button
 end
 
+-- Hides rack slot buttons params supplies inputs.
 function hideRackSlotButtons(params)
 
     local rack = getObjectFromGUID(params.rackGUID)
@@ -6571,6 +6071,7 @@ function hideRackSlotButtons(params)
     rack.editButton({index=buttonIndex+3, position={params.xPos + 0.34, 1000, 0.02}}) -- Level Up Button
 end
 
+-- Hides all rack buttons.
 function hideAllRackButtons(buttonParams)
     local rack = getObjectFromGUID(buttonParams.rackGUID)
     local buttonIndex = 5
@@ -6593,52 +6094,62 @@ function hideAllRackButtons(buttonParams)
     end
 end
 
+-- Handles multi evo 1.
 function multiEvo1()
 
   multiEvolve(1)
 
 end
 
+-- Handles multi evo 2.
 function multiEvo2()
 
   multiEvolve(2)
 end
 
+-- Handles multi evo 3.
 function multiEvo3()
 
   multiEvolve(3)
 end
 
+-- Handles multi evo 4.
 function multiEvo4()
 
   multiEvolve(4)
 end
 
+-- Handles multi evo 5.
 function multiEvo5()
 
   multiEvolve(5)
 end
 
+-- Handles multi evo 6.
 function multiEvo6()
 
   multiEvolve(6)
 end
 
+-- Handles multi evo 7.
 function multiEvo7()
 
   multiEvolve(7)
 end
 
+-- Handles multi evo 8.
 function multiEvo8()
 
   multiEvolve(8)
 end
 
+-- Handles multi evo 9.
 function multiEvo9()
 
   multiEvolve(9)
 end
 
+-- Handles multi evolve.
 function multiEvolve(index)
   multiEvolving = false
   local params = multiEvoData.params
@@ -6752,6 +6263,7 @@ function updateEvoButtons(params)
     end
 end
 
+-- Hides evo buttons params supplies inputs.
 function hideEvoButtons(params)
     if params.inArena then
       hideArenaEvoButtons(params.isAttacker)
@@ -6781,6 +6293,7 @@ function updateRackEvoButtons(params)
     end
 end
 
+-- Hides rack evo buttons params supplies inputs.
 function hideRackEvoButtons(params)
     local rack = getObjectFromGUID(params.rackGUID)
     local buttonIndex = 2 + (8 * params.index)
@@ -6790,17 +6303,22 @@ function hideRackEvoButtons(params)
     rack.editButton({index=buttonIndex+2, position={params.pokemonXPos[7 - params.index] + 0.24, 1000, params.pokemonZPos + 0.025}, tooltip=""})
 end
 
+-- Updates arena evo buttons params supplies inputs. isAttacker selects attacker/defender.
 function updateArenaEvoButtons(params, isAttacker)
 
   local position1
   local position2
+  local buttonId1
+  local buttonId2
 
   if isAttacker then
-    buttonIndex = 7
+    buttonId1 = BUTTON_ID.atkEvo1
+    buttonId2 = BUTTON_ID.atkEvo2
     position1 = {x=atkEvolve1Pos.x, y=0.4, z=atkEvolve1Pos.z}
     position2 = {x=atkEvolve2Pos.x, y=0.4, z=atkEvolve2Pos.z}
   else
-    buttonIndex = 21
+    buttonId1 = BUTTON_ID.defEvo1
+    buttonId2 = BUTTON_ID.defEvo2
     position1 = {x=defEvolve1Pos.x, y=0.4, z=defEvolve1Pos.z}
     position2 = {x=defEvolve2Pos.x, y=0.4, z=defEvolve2Pos.z}
   end
@@ -6809,27 +6327,27 @@ function updateArenaEvoButtons(params, isAttacker)
     local buttonTooltip2
     buttonTooltip = "Evolve into " .. params.evoName
     buttonTooltip2 = "Evolve into " .. params.evoNameTwo
-    self.editButton({index=buttonIndex, position=position1, tooltip=buttonTooltip})
-    self.editButton({index=buttonIndex+1, position=position2, tooltip=buttonTooltip2})
+    edit_button(buttonId1, {position=position1, tooltip=buttonTooltip})
+    edit_button(buttonId2, {position=position2, tooltip=buttonTooltip2})
   else
     if params.numEvos == 1 then
         buttonTooltip = "Evolve into " .. params.evoName
     else
         buttonTooltip = "Evolve " .. params.pokemonName
     end
-    self.editButton({index=buttonIndex, position=position1, tooltip=buttonTooltip})
+    edit_button(buttonId1, {position=position1, tooltip=buttonTooltip})
   end
 end
 
+-- Hides arena evo buttons isAttacker selects attacker/defender.
 function hideArenaEvoButtons(isAttacker)
-
-    if isAttacker then
-      self.editButton({index=7, position={atkEvolve1Pos.x, 1000, atkEvolve1Pos.z}})
-      self.editButton({index=8, position={atkEvolve2Pos.x, 1000, atkEvolve2Pos.z}})
-    else
-      self.editButton({index=21, position={defEvolve1Pos.x, 1000, defEvolve1Pos.z}})
-      self.editButton({index=22, position={defEvolve2Pos.x, 1000, defEvolve2Pos.z}})
-    end
+  if isAttacker then
+    edit_button(BUTTON_ID.atkEvo1, { position={atkEvolve1Pos.x, 1000, atkEvolve1Pos.z}})
+    edit_button(BUTTON_ID.atkEvo2, { position={atkEvolve2Pos.x, 1000, atkEvolve2Pos.z}})
+  else
+    edit_button(BUTTON_ID.defEvo1, { position={defEvolve1Pos.x, 1000, defEvolve1Pos.z}})
+    edit_button(BUTTON_ID.defEvo2, { position={defEvolve2Pos.x, 1000, defEvolve2Pos.z}})
+  end
 end
 
 --------------------------------------------------------------------------------
@@ -6837,12 +6355,16 @@ end
 --------------------------------------------------------------------------------
 
 function showMoveButtons(isAttacker, cardMoveData)
+  local buttonIds
+  local movesZPos
+  local moves
+
   if isAttacker then
-    buttonIndex = 8
+    buttonIds = {BUTTON_ID.atkMove1, BUTTON_ID.atkMove2, BUTTON_ID.atkMove3, BUTTON_ID.atkMove4}
     movesZPos = atkMoveZPos
     moves = attackerPokemon.movesData
   else
-    buttonIndex = 22
+    buttonIds = {BUTTON_ID.defMove1, BUTTON_ID.defMove2, BUTTON_ID.defMove3, BUTTON_ID.defMove4}
     movesZPos = defMoveZPos
     moves = defenderPokemon.movesData
   end
@@ -6855,7 +6377,7 @@ function showMoveButtons(isAttacker, cardMoveData)
   local buttonWidths = (numMoves*3.15) + ((numMoves-1) + 0.45)
   local xPos = 9.415 - (buttonWidths * 0.49)
 
-  for i=1, numMoves do
+  for i=1, math.min(numMoves, #buttonIds) do
     local moveName = tostring(moves[i].name)
     local moveType = tostring(moves[i].type)
     local button_color = copyTable(Global.call("type_to_color_lookup", moveType))
@@ -6897,63 +6419,55 @@ function showMoveButtons(isAttacker, cardMoveData)
       end
     end
 
-    self.editButton({index=buttonIndex+i, position={xPos + (3.75*(i-1)), 0.45, movesZPos}, label=moveName, font_color=font_color, color=button_color, tooltip=tooltip})
+    edit_button(buttonIds[i], { position={xPos + (3.75*(i-1)), 0.45, movesZPos}, label=moveName, font_color=font_color, color=button_color, tooltip=tooltip})
   end
 end
 
-function showConfirmButton(isAttacker, label)
-
-  local buttonIndex
-  local pos
-
+-- Shows random move button isAttacker selects attacker/defender.
+function showRandomMoveButton(isAttacker)
   if isAttacker then
-    buttonIndex = 13
-    pos = {x=atkConfirmPos.x, y=0.4, z=atkConfirmPos.z}
-    attackerConfirmed = false
+    edit_button(BUTTON_ID.atkRandomMove, { position={atkConfirmPos.x, 0.4, atkConfirmPos.z}, label="RANDOM MOVE" })
   else
-    buttonIndex = 27
-    pos = {x=defConfirmPos.x, y=0.4, z=defConfirmPos.z}
-    defenderConfirmed = false
+    edit_button(BUTTON_ID.defRandomMove, { position={defConfirmPos.x, 0.4, defConfirmPos.z}, label="RANDOM MOVE" })
   end
-
-  self.editButton({index=buttonIndex, position=pos, label=label})
 end
 
-function hideConfirmButton(isAttacker)
-
+-- Hides random move button isAttacker selects attacker/defender.
+function hideRandomMoveButton(isAttacker)
   if isAttacker then
-      self.editButton({index=13, position={atkConfirmPos.x, 1000, atkConfirmPos.z}})
+    edit_button(BUTTON_ID.atkRandomMove, { position={atkConfirmPos.x, 1000, atkConfirmPos.z}})
   else
-      self.editButton({index=27, position={defConfirmPos.x, 1000, defConfirmPos.z}})
+    edit_button(BUTTON_ID.defRandomMove, { position={defConfirmPos.x, 1000, defConfirmPos.z}})
   end
 end
 
 -- This function is for player-controlled trainers.
 function showAtkButtons(visible)
-    local yPos = visible and 0.4 or 1000
-    self.editButton({index=0, position={teamAtkPos.x, yPos, teamAtkPos.z}, click_function="recallAndFaintAttackerPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
-    self.editButton({index=1, position={movesAtkPos.x, yPos, movesAtkPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
-    self.editButton({index=2, position={recallAtkPos.x, yPos, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL"})
-    self.editButton({index=3, position={incLevelAtkPos.x, yPos, incLevelAtkPos.z}})
-    self.editButton({index=4, position={decLevelAtkPos.x, yPos, decLevelAtkPos.z}})
-    self.editButton({index=5, position={incStatusAtkPos.x, yPos, incStatusAtkPos.z}})
-    self.editButton({index=6, position={decStatusAtkPos.x, yPos, decStatusAtkPos.z}})
+  local yPos = visible and 0.4 or 1000
+  edit_button(BUTTON_ID.atkFaint, { position={teamAtkPos.x, yPos, teamAtkPos.z}, click_function="recallAndFaintAttackerPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
+  edit_button(BUTTON_ID.atkMoves, { position={movesAtkPos.x, yPos, movesAtkPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
+  edit_button(BUTTON_ID.atkRecall, { position={recallAtkPos.x, yPos, recallAtkPos.z}, click_function="recallAtkArena", label="RECALL"})
+  edit_button(BUTTON_ID.atkLevelUp, { position={incLevelAtkPos.x, yPos, incLevelAtkPos.z}})
+  edit_button(BUTTON_ID.atkLevelDown, { position={decLevelAtkPos.x, yPos, decLevelAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusUp, { position={incStatusAtkPos.x, yPos, incStatusAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusDown, { position={decStatusAtkPos.x, yPos, decStatusAtkPos.z}})
 
-    if visible == false then
-      hideArenaEvoButtons(true)
-      hideArenaMoveButtons(true)
-    end
+  if visible == false then
+    hideArenaEvoButtons(true)
+    hideArenaMoveButtons(true)
+  end
 end
 
+-- Shows def buttons.
 function showDefButtons(visible)
     local yPos = visible and 0.4 or 1000
-    self.editButton({index=14, position={teamDefPos.x, yPos, teamDefPos.z}, click_function="recallAndFaintDefenderPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
-    self.editButton({index=15, position={movesDefPos.x, yPos, movesDefPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
-    self.editButton({index=16, position={recallDefPos.x, yPos, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
-    self.editButton({index=17, position={incLevelDefPos.x, yPos, incLevelDefPos.z}, click_function="increaseDefArena"})
-    self.editButton({index=18, position={decLevelDefPos.x, yPos, decLevelDefPos.z}, click_function="decreaseDefArena"})
-    self.editButton({index=19, position={incStatusDefPos.x, yPos, incStatusDefPos.z}, click_function="addDefStatus"})
-    self.editButton({index=20, position={decStatusDefPos.x, yPos, decStatusDefPos.z}, click_function="removeDefStatus"})
+    edit_button(BUTTON_ID.defFaint, { position={teamDefPos.x, yPos, teamDefPos.z}, click_function="recallAndFaintDefenderPokemon", label="FAINT", tooltip="Recall and Faint Pokémon"})
+    edit_button(BUTTON_ID.defMoves, { position={movesDefPos.x, yPos, movesDefPos.z}, click_function="seeMoveRules", label="MOVES", tooltip="Show Move Rules"})
+    edit_button(BUTTON_ID.defRecall, { position={recallDefPos.x, yPos, recallDefPos.z}, click_function="recallDefArena", label="RECALL", tooltip="Recall Pokémon"})
+    edit_button(BUTTON_ID.defLevelUp, { position={incLevelDefPos.x, yPos, incLevelDefPos.z}, click_function="increaseDefArena"})
+    edit_button(BUTTON_ID.defLevelDown, { position={decLevelDefPos.x, yPos, decLevelDefPos.z}, click_function="decreaseDefArena"})
+    edit_button(BUTTON_ID.defStatusUp, { position={incStatusDefPos.x, yPos, incStatusDefPos.z}, click_function="addDefStatus"})
+    edit_button(BUTTON_ID.defStatusDown, { position={decStatusDefPos.x, yPos, decStatusDefPos.z}, click_function="removeDefStatus"})
 
     if visible == false then
       hideArenaEvoButtons(false)
@@ -6964,36 +6478,36 @@ end
 -- This function shows or hides the attacker status buttons. For use with Gyms and Rivals, since Players automaticaclly get this.
 function showAtkStatusButtons(visible)
   local yPos = visible and 0.4 or 1000
-  self.editButton({index=5, position={incStatusAtkPos.x, yPos, incStatusAtkPos.z}})
-  self.editButton({index=6, position={decStatusAtkPos.x, yPos, decStatusAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusUp, { position={incStatusAtkPos.x, yPos, incStatusAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusDown, { position={decStatusAtkPos.x, yPos, decStatusAtkPos.z}})
 end
 
 -- This function shows or hides the defender status buttons. For use with Gyms and Rivals, since Players automaticaclly get this.
 function showDefStatusButtons(visible)
   local yPos = visible and 0.4 or 1000
-  self.editButton({index=19, position={incStatusDefPos.x, yPos, incStatusDefPos.z}})
-  self.editButton({index=20, position={decStatusDefPos.x, yPos, decStatusDefPos.z}})
+  edit_button(BUTTON_ID.defStatusUp, { position={incStatusDefPos.x, yPos, incStatusDefPos.z}})
+  edit_button(BUTTON_ID.defStatusDown, { position={decStatusDefPos.x, yPos, decStatusDefPos.z}})
 end
 
+-- Hides arena move buttons isAttacker selects attacker/defender.
 function hideArenaMoveButtons(isAttacker)
-
     if isAttacker then
-      self.editButton({index=9, position={atkEvolve1Pos.x, 1000, atkEvolve1Pos.z}})
-      self.editButton({index=10, position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
-      self.editButton({index=11, position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
-      self.editButton({index=12, position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
+      edit_button(BUTTON_ID.atkMove1, { position={atkEvolve1Pos.x, 1000, atkEvolve1Pos.z}})
+      edit_button(BUTTON_ID.atkMove2, { position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
+      edit_button(BUTTON_ID.atkMove3, { position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
+      edit_button(BUTTON_ID.atkMove4, { position={atkEvolve1Pos.x, 1000, atkEvolve2Pos.z}})
     else
-      self.editButton({index=23, position={defEvolve1Pos.x, 1000, defEvolve1Pos.z}})
-      self.editButton({index=24, position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
-      self.editButton({index=25, position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
-      self.editButton({index=26, position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
+      edit_button(BUTTON_ID.defMove1, { position={defEvolve1Pos.x, 1000, defEvolve1Pos.z}})
+      edit_button(BUTTON_ID.defMove2, { position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
+      edit_button(BUTTON_ID.defMove3, { position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
+      edit_button(BUTTON_ID.defMove4, { position={defEvolve1Pos.x, 1000, defEvolve2Pos.z}})
     end
 
     hideArenaEffectiness(isAttacker)
 end
 
+-- Hides arena effectiness isAttacker selects attacker/defender.
 function hideArenaEffectiness(isAttacker)
-
   local moveText = isAttacker and atkMoveText or defMoveText
   for i=1, 4 do
     local textfield = getObjectFromGUID(moveText[i])
@@ -7001,13 +6515,21 @@ function hideArenaEffectiness(isAttacker)
   end
 end
 
+-- Shows wild pokemon button.
 function showWildPokemonButton(visible)
 
   local yPos = visible and 0.4 or 1000
-  self.editButton({index=37, position={defConfirmPos.x, yPos, -6.2}})
+  edit_button(BUTTON_ID.battleWild, { position={defConfirmPos.x, yPos, -6.2}})
 end
 
+-- Shows multi evo buttons.
 function showMultiEvoButtons(evoData)
+  local buttonIds = {
+    BUTTON_ID.multiEvo1, BUTTON_ID.multiEvo2, BUTTON_ID.multiEvo3,
+    BUTTON_ID.multiEvo4, BUTTON_ID.multiEvo5, BUTTON_ID.multiEvo6,
+    BUTTON_ID.multiEvo7, BUTTON_ID.multiEvo8, BUTTON_ID.multiEvo9
+  }
+
   for evoIndex = 1, #evoData do
     if evoData[evoIndex].model_GUID ~= nil then
       table.insert(multiEvoGuids, evoData[evoIndex].model_GUID)
@@ -7016,7 +6538,6 @@ function showMultiEvoButtons(evoData)
     end
   end
 
-  local buttonIndex = 27
   local numEvos = #evoData
   local tokensWidth = ((numEvos * 2.8) + ((numEvos-1) * 0.2) )
 
@@ -7025,65 +6546,74 @@ function showMultiEvoButtons(evoData)
     local worldPos = {xPos, 1, -30}
     local localPos = self.positionToLocal(worldPos)
     localPos.x = -localPos.x
-    self.editButton({index=buttonIndex+i, position=localPos})
+    edit_button(buttonIds[i], {position=localPos})
   end
 end
 
+-- Hides multi evo buttons.
 function hideMultiEvoButtons()
-  local buttonIndex = 27
+  local buttonIds = {
+    BUTTON_ID.multiEvo1, BUTTON_ID.multiEvo2, BUTTON_ID.multiEvo3,
+    BUTTON_ID.multiEvo4, BUTTON_ID.multiEvo5, BUTTON_ID.multiEvo6,
+    BUTTON_ID.multiEvo7, BUTTON_ID.multiEvo8, BUTTON_ID.multiEvo9
+  }
+
   for i=1, 9 do
-    self.editButton({index=buttonIndex+i, position={0, 1000, 0}})
+    edit_button(buttonIds[i], {position={0, 1000, 0}})
   end
 end
 
+-- Shows flip gym button.
 function showFlipGymButton(visible)
   local yPos = visible and 0.5 or 1000
-  self.editButton({index=38, position={gymFlipButtonPos.x, yPos, gymFlipButtonPos.z}})
+  edit_button(BUTTON_ID.nextPokemon, { position={gymFlipButtonPos.x, yPos, gymFlipButtonPos.z}})
 end
 
+-- Shows flip rival button.
 function showFlipRivalButton(visible)
   local yPos = visible and 0.5 or 1000
-  self.editButton({index=41, position={rivalFlipButtonPos.x, yPos, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
+  edit_button(BUTTON_ID.nextRival, { position={rivalFlipButtonPos.x, yPos, rivalFlipButtonPos.z}, click_function="flipRivalPokemon", tooltip=""})
 end
 
 -- Helper function to despawn autoroller dice.
 function despawnAutoRollDice(isAttacker)
   if isAttacker then
     -- Despawn any existing spawned dice.
-    for dice_index=1, #atkSpawnedDiceTable do
+    for dice_index=1, #ATK_SPAWNED_DICE_TABLE do
       -- Delete the dice.
-      if not atkSpawnedDiceTable[dice_index].isDestroyed() then
-        atkSpawnedDiceTable[dice_index].destruct()
+      if not ATK_SPAWNED_DICE_TABLE[dice_index].isDestroyed() then
+        ATK_SPAWNED_DICE_TABLE[dice_index].destruct()
       end
     end
-    atkSpawnedDiceTable = {}
+    ATK_SPAWNED_DICE_TABLE = {}
   elseif isAttacker == false then
     -- Despawn any existing spawned dice.
-    for dice_index=1, #defSpawnedDiceTable do
+    for dice_index=1, #DEF_SPAWNED_DICE_TABLE do
       -- Delete the dice.
-      defSpawnedDiceTable[dice_index].destruct()
+      DEF_SPAWNED_DICE_TABLE[dice_index].destruct()
     end
-    defSpawnedDiceTable = {}
+    DEF_SPAWNED_DICE_TABLE = {}
   else
     -- Despawn both tables.
-    for dice_index=1, #atkSpawnedDiceTable do
+    for dice_index=1, #ATK_SPAWNED_DICE_TABLE do
       -- Delete the dice.
-      if not atkSpawnedDiceTable[dice_index].isDestroyed() then
-        atkSpawnedDiceTable[dice_index].destruct()
+      if not ATK_SPAWNED_DICE_TABLE[dice_index].isDestroyed() then
+        ATK_SPAWNED_DICE_TABLE[dice_index].destruct()
       end
     end
-    atkSpawnedDiceTable = {}
+    ATK_SPAWNED_DICE_TABLE = {}
 
-    for dice_index=1, #defSpawnedDiceTable do
+    for dice_index=1, #DEF_SPAWNED_DICE_TABLE do
       -- Delete the dice.
-      if not defSpawnedDiceTable[dice_index].isDestroyed() then
-        defSpawnedDiceTable[dice_index].destruct()
+      if not DEF_SPAWNED_DICE_TABLE[dice_index].isDestroyed() then
+        DEF_SPAWNED_DICE_TABLE[dice_index].destruct()
       end
     end
-    defSpawnedDiceTable = {}
+    DEF_SPAWNED_DICE_TABLE = {}
   end
 end
 
+-- Shows auto roll buttons.
 function showAutoRollButtons(visible)
   -- Check if auto rollers are enabled.
   local rivalEventPokeball = getObjectFromGUID("432e69")
@@ -7096,36 +6626,32 @@ function showAutoRollButtons(visible)
   if roller_type == 0 then 
     -- AutoRollers are not enabled. Hide everything.
     -- Hide Autoroll Attacker.
-    self.editButton({index=42, position={autoRollAtkPos.x, 1000, autoRollAtkPos.z}})
-    self.editButton({index=43, position={autoRollAtkDicePos.blue.x, 1000, autoRollAtkDicePos.blue.z}})
-    self.editButton({index=44, position={autoRollAtkDicePos.white.x, 1000, autoRollAtkDicePos.white.z}})
-    self.editButton({index=45, position={autoRollAtkDicePos.purple.x, 1000, autoRollAtkDicePos.purple.z}})
-    self.editButton({index=46, position={autoRollAtkDicePos.red.x, 1000, autoRollAtkDicePos.red.z}})
+    edit_button(BUTTON_ID.autoRollAttacker, { position={autoRollAtkPos.x, 1000, autoRollAtkPos.z}})
+    edit_button(BUTTON_ID.autoRollAtkBlue, { position={autoRollAtkDicePos.blue.x, 1000, autoRollAtkDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollAtkWhite, { position={autoRollAtkDicePos.white.x, 1000, autoRollAtkDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollAtkPurple, { position={autoRollAtkDicePos.purple.x, 1000, autoRollAtkDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollAtkRed, { position={autoRollAtkDicePos.red.x, 1000, autoRollAtkDicePos.red.z}})
     -- Show/Hide Autoroll Defender.
-    self.editButton({index=47, position={autoRollDefPos.x, 1000, autoRollDefPos.z}})
-    self.editButton({index=48, position={autoRollDefDicePos.blue.x, 1000, autoRollDefDicePos.blue.z}})
-    self.editButton({index=49, position={autoRollDefDicePos.white.x, 1000, autoRollDefDicePos.white.z}})
-    self.editButton({index=50, position={autoRollDefDicePos.purple.x, 1000, autoRollDefDicePos.purple.z}})
-    self.editButton({index=51, position={autoRollDefDicePos.red.x, 1000, autoRollDefDicePos.red.z}})
-    -- Simulate.
-    self.editButton({index=52, position={simulatePos.x, 1000, simulatePos.z}})
+    edit_button(BUTTON_ID.autoRollDefender, { position={autoRollDefPos.x, 1000, autoRollDefPos.z}})
+    edit_button(BUTTON_ID.autoRollDefBlue, { position={autoRollDefDicePos.blue.x, 1000, autoRollDefDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollDefWhite, { position={autoRollDefDicePos.white.x, 1000, autoRollDefDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollDefPurple, { position={autoRollDefDicePos.purple.x, 1000, autoRollDefDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollDefRed, { position={autoRollDefDicePos.red.x, 1000, autoRollDefDicePos.red.z}})
   elseif roller_type == 3 or roller_type == 4 then
     -- Create some offsets and edit the button.
     local y_pos = visible and 0.5 or 1000
     -- Hide Autoroll Attacker.
-    self.editButton({index=42, position={autoRollAtkPos.x, 1000, autoRollAtkPos.z}})
-    self.editButton({index=43, position={autoRollAtkDicePos.blue.x, 1000, autoRollAtkDicePos.blue.z}})
-    self.editButton({index=44, position={autoRollAtkDicePos.white.x, 1000, autoRollAtkDicePos.white.z}})
-    self.editButton({index=45, position={autoRollAtkDicePos.purple.x, 1000, autoRollAtkDicePos.purple.z}})
-    self.editButton({index=46, position={autoRollAtkDicePos.red.x, 1000, autoRollAtkDicePos.red.z}})
+    edit_button(BUTTON_ID.autoRollAttacker, { position={autoRollAtkPos.x, 1000, autoRollAtkPos.z}})
+    edit_button(BUTTON_ID.autoRollAtkBlue, { position={autoRollAtkDicePos.blue.x, 1000, autoRollAtkDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollAtkWhite, { position={autoRollAtkDicePos.white.x, 1000, autoRollAtkDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollAtkPurple, { position={autoRollAtkDicePos.purple.x, 1000, autoRollAtkDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollAtkRed, { position={autoRollAtkDicePos.red.x, 1000, autoRollAtkDicePos.red.z}})
     -- Hide Autoroll Defender.
-    self.editButton({index=47, position={autoRollDefPos.x, 1000, autoRollDefPos.z}})
-    self.editButton({index=48, position={autoRollDefDicePos.blue.x, 1000, autoRollDefDicePos.blue.z}})
-    self.editButton({index=49, position={autoRollDefDicePos.white.x, 1000, autoRollDefDicePos.white.z}})
-    self.editButton({index=50, position={autoRollDefDicePos.purple.x, 1000, autoRollDefDicePos.purple.z}})
-    self.editButton({index=51, position={autoRollDefDicePos.red.x, 1000, autoRollDefDicePos.red.z}})
-    -- Show/Hide Simulate.
-    self.editButton({index=52, position={simulatePos.x, y_pos, simulatePos.z}})
+    edit_button(BUTTON_ID.autoRollDefender, { position={autoRollDefPos.x, 1000, autoRollDefPos.z}})
+    edit_button(BUTTON_ID.autoRollDefBlue, { position={autoRollDefDicePos.blue.x, 1000, autoRollDefDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollDefWhite, { position={autoRollDefDicePos.white.x, 1000, autoRollDefDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollDefPurple, { position={autoRollDefDicePos.purple.x, 1000, autoRollDefDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollDefRed, { position={autoRollDefDicePos.red.x, 1000, autoRollDefDicePos.red.z}})
 
     -- Despawn any existing spawned dice.
     despawnAutoRollDice()
@@ -7133,19 +6659,17 @@ function showAutoRollButtons(visible)
     -- Create some offsets and edit the buttons.
     local y_pos = visible and 0.5 or 1000
     -- Show/Hide Autoroll Attacker.
-    self.editButton({index=42, position={autoRollAtkPos.x, y_pos, autoRollAtkPos.z}})
-    self.editButton({index=43, position={autoRollAtkDicePos.blue.x, y_pos, autoRollAtkDicePos.blue.z}})
-    self.editButton({index=44, position={autoRollAtkDicePos.white.x, y_pos, autoRollAtkDicePos.white.z}})
-    self.editButton({index=45, position={autoRollAtkDicePos.purple.x, y_pos, autoRollAtkDicePos.purple.z}})
-    self.editButton({index=46, position={autoRollAtkDicePos.red.x, y_pos, autoRollAtkDicePos.red.z}})
+    edit_button(BUTTON_ID.autoRollAttacker, { position={autoRollAtkPos.x, y_pos, autoRollAtkPos.z}})
+    edit_button(BUTTON_ID.autoRollAtkBlue, { position={autoRollAtkDicePos.blue.x, y_pos, autoRollAtkDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollAtkWhite, { position={autoRollAtkDicePos.white.x, y_pos, autoRollAtkDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollAtkPurple, { position={autoRollAtkDicePos.purple.x, y_pos, autoRollAtkDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollAtkRed, { position={autoRollAtkDicePos.red.x, y_pos, autoRollAtkDicePos.red.z}})
     -- Show/Hide Autoroll Defender.
-    self.editButton({index=47, position={autoRollDefPos.x, y_pos, autoRollDefPos.z}})
-    self.editButton({index=48, position={autoRollDefDicePos.blue.x, y_pos, autoRollDefDicePos.blue.z}})
-    self.editButton({index=49, position={autoRollDefDicePos.white.x, y_pos, autoRollDefDicePos.white.z}})
-    self.editButton({index=50, position={autoRollDefDicePos.purple.x, y_pos, autoRollDefDicePos.purple.z}})
-    self.editButton({index=51, position={autoRollDefDicePos.red.x, y_pos, autoRollDefDicePos.red.z}})
-    -- Hide Simulate.
-    self.editButton({index=52, position={simulatePos.x, 1000, simulatePos.z}})
+    edit_button(BUTTON_ID.autoRollDefender, { position={autoRollDefPos.x, y_pos, autoRollDefPos.z}})
+    edit_button(BUTTON_ID.autoRollDefBlue, { position={autoRollDefDicePos.blue.x, y_pos, autoRollDefDicePos.blue.z}})
+    edit_button(BUTTON_ID.autoRollDefWhite, { position={autoRollDefDicePos.white.x, y_pos, autoRollDefDicePos.white.z}})
+    edit_button(BUTTON_ID.autoRollDefPurple, { position={autoRollDefDicePos.purple.x, y_pos, autoRollDefDicePos.purple.z}})
+    edit_button(BUTTON_ID.autoRollDefRed, { position={autoRollDefDicePos.red.x, y_pos, autoRollDefDicePos.red.z}})
 
     -- Either way, reset the AutoRoll button counts.
     atkAutoRollCounts = {blue=0, white=1, purple=0, red=0}
@@ -7156,6 +6680,96 @@ function showAutoRollButtons(visible)
     despawnAutoRollDice()
   end
 end
+
+-- Shows move disable buttons isAttacker selects attacker/defender.
+function showMoveDisableButtons(isAttacker, visible)
+  local buttonIds
+  local movesZPos
+  local moves
+
+  if isAttacker then
+    buttonIds = {BUTTON_ID.atkMove1Disable, BUTTON_ID.atkMove2Disable, BUTTON_ID.atkMove3Disable, BUTTON_ID.atkMove4Disable}
+    movesZPos = atkMoveDisableZPos
+    moves = attackerPokemon and attackerPokemon.movesData or {}
+  else
+    buttonIds = {BUTTON_ID.defMove1Disable, BUTTON_ID.defMove2Disable, BUTTON_ID.defMove3Disable, BUTTON_ID.defMove4Disable}
+    movesZPos = defMoveDisableZPos
+    moves = defenderPokemon and defenderPokemon.movesData or {}
+  end
+
+  local numMoves = #moves
+  local buttonWidths = (numMoves * 3.15) + ((numMoves - 1) + 0.45)
+  local xPos = 9.415 - (buttonWidths * 0.49)
+  local yPos = visible and 0.45 or 1000
+
+  for i=1, #buttonIds do
+    local buttonY = (visible and i <= numMoves) and yPos or 1000
+    edit_button(buttonIds[i], {position={xPos + (3.75 * (i - 1)), buttonY, movesZPos}})
+  end
+end
+
+-- Handles atk move 1 disable.
+function atkMove1Disable()
+  disableMove(1, ATTACKER)
+end
+
+-- Handles atk move 2 disable.
+function atkMove2Disable()
+  disableMove(2, ATTACKER)
+end
+
+-- Handles atk move 3 disable.
+function atkMove3Disable()
+  disableMove(3, ATTACKER)
+end
+
+-- Handles atk move 4 disable.
+function atkMove4Disable()
+  disableMove(4, ATTACKER)
+end
+
+-- Handles def move 1 disable.
+function defMove1Disable()
+  disableMove(1, DEFENDER)
+end
+
+-- Handles def move 2 disable.
+function defMove2Disable()
+  disableMove(2, DEFENDER)
+end
+
+-- Handles def move 3 disable.
+function defMove3Disable()
+  disableMove(3, DEFENDER)
+end
+
+-- Handles def move 4 disable.
+function defMove4Disable()
+  disableMove(4, DEFENDER)
+end
+
+-- Disable a move for a given side.
+function disableMove(index, isAttacker)
+  local pokemon = isAttacker and attackerPokemon or defenderPokemon
+  if not pokemon or not pokemon.movesData or not pokemon.movesData[index] then
+    return
+  end
+
+  -- Set the move to disabled.
+  pokemon.movesData[index].status = DISABLED
+
+  local data = isAttacker and attackerData or defenderData
+  if data and data.selectedMoveIndex == index then
+    clearSelectedMove(isAttacker)
+  end
+
+  showMoveDisableButtons(isAttacker, false)
+  updateMoves(isAttacker, pokemon)
+end
+
+------------------------------
+-- Autoroll Logic.
+------------------------------
 
 -- Helper function to roll some dice in the logs.
 -- Returns the dice attack dice that were rolled. Only the highest count attack dice.
@@ -7271,7 +6885,7 @@ function auto_roll_dice(isAttacker, color)
   if auto_roll_counts.blue < 1 and auto_roll_counts.white < 1 and auto_roll_counts.purple < 1 and auto_roll_counts.red < 1 then return end
 
   -- Save off the table we need to use for the spawned dice.
-  local spawned_dice_table = isAttacker and atkSpawnedDiceTable or defSpawnedDiceTable
+  local spawned_dice_table = isAttacker and ATK_SPAWNED_DICE_TABLE or DEF_SPAWNED_DICE_TABLE
 
   -- Determine the location to roll the dice.
   local z_multiplier = isAttacker and -1.0 or 1.0
@@ -7370,6 +6984,7 @@ function autoRollAttacker(obj, color, alt)
   local rivalEventPokeball = getObjectFromGUID("432e69")
   if not rivalEventPokeball then
     print("Failed to find Rival Event Pokeball")
+    return
   end
   -- Check that we have values to AutoRoll.
   if atkAutoRollCounts.blue == 0 and atkAutoRollCounts.white == 0 and atkAutoRollCounts.purple == 0 and atkAutoRollCounts.red == 0 then return end
@@ -7395,6 +7010,7 @@ function autoRollAttacker(obj, color, alt)
   end
 end
 
+-- Handles adjust atk dice blue.
 function adjustAtkDiceBlue(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(ATTACKER)
@@ -7420,6 +7036,7 @@ function adjustAtkDiceBlue(obj, color, alt)
   updateAutoRollButtons(ATTACKER)
 end
 
+-- Handles adjust atk dice white.
 function adjustAtkDiceWhite(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(ATTACKER)
@@ -7445,6 +7062,7 @@ function adjustAtkDiceWhite(obj, color, alt)
   updateAutoRollButtons(ATTACKER)
 end
 
+-- Handles adjust atk dice purple.
 function adjustAtkDicePurple(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(ATTACKER)
@@ -7470,6 +7088,7 @@ function adjustAtkDicePurple(obj, color, alt)
   updateAutoRollButtons(ATTACKER)
 end
 
+-- Rolls atk effect die.
 function rollAtkEffectDie(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(ATTACKER)
@@ -7522,6 +7141,7 @@ function autoRollDefender(obj, color, alt)
   end
 end
 
+-- Handles adjust def dice blue.
 function adjustDefDiceBlue(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(DEFENDER)
@@ -7547,6 +7167,7 @@ function adjustDefDiceBlue(obj, color, alt)
   updateAutoRollButtons(DEFENDER)
 end
 
+-- Handles adjust def dice white.
 function adjustDefDiceWhite(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(DEFENDER)
@@ -7572,6 +7193,7 @@ function adjustDefDiceWhite(obj, color, alt)
   updateAutoRollButtons(DEFENDER)
 end
 
+-- Handles adjust def dice purple.
 function adjustDefDicePurple(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(DEFENDER)
@@ -7597,6 +7219,7 @@ function adjustDefDicePurple(obj, color, alt)
   updateAutoRollButtons(DEFENDER)
 end
 
+-- Rolls def effect die.
 function rollDefEffectDie(obj, color, alt)
   -- Despawn existing dice.
   despawnAutoRollDice(DEFENDER)
@@ -7618,24 +7241,24 @@ end
 function updateAutoRollButtons(isAttacker)
   if isAttacker then
     -- Update Attacker only.
-    self.editButton({index=43, label=atkAutoRollCounts.blue})
-    self.editButton({index=44, label=atkAutoRollCounts.white})
-    self.editButton({index=45, label=atkAutoRollCounts.purple})
+    edit_button(BUTTON_ID.autoRollAtkBlue, { label=atkAutoRollCounts.blue})
+    edit_button(BUTTON_ID.autoRollAtkWhite, { label=atkAutoRollCounts.white})
+    edit_button(BUTTON_ID.autoRollAtkPurple, { label=atkAutoRollCounts.purple})
   elseif isAttacker == false then
     -- Update Defender only.
-    self.editButton({index=48, label=defAutoRollCounts.blue})
-    self.editButton({index=49, label=defAutoRollCounts.white})
-    self.editButton({index=50, label=defAutoRollCounts.purple})
+    edit_button(BUTTON_ID.autoRollDefBlue, { label=defAutoRollCounts.blue})
+    edit_button(BUTTON_ID.autoRollDefWhite, { label=defAutoRollCounts.white})
+    edit_button(BUTTON_ID.autoRollDefPurple, { label=defAutoRollCounts.purple})
   else
     -- Both. Used when no arguement is given.
     -- Attacker.
-    self.editButton({index=43, label=atkAutoRollCounts.blue})
-    self.editButton({index=44, label=atkAutoRollCounts.white})
-    self.editButton({index=45, label=atkAutoRollCounts.purple})
+    edit_button(BUTTON_ID.autoRollAtkBlue, { label=atkAutoRollCounts.blue})
+    edit_button(BUTTON_ID.autoRollAtkWhite, { label=atkAutoRollCounts.white})
+    edit_button(BUTTON_ID.autoRollAtkPurple, { label=atkAutoRollCounts.purple})
     -- Defender.
-    self.editButton({index=48, label=defAutoRollCounts.blue})
-    self.editButton({index=49, label=defAutoRollCounts.white})
-    self.editButton({index=50, label=atkAutoRollCounts.purple})
+    edit_button(BUTTON_ID.autoRollDefBlue, { label=defAutoRollCounts.blue})
+    edit_button(BUTTON_ID.autoRollDefWhite, { label=defAutoRollCounts.white})
+    edit_button(BUTTON_ID.autoRollDefPurple, { label=atkAutoRollCounts.purple})
   end
 end
 
@@ -7661,551 +7284,6 @@ function constructPokemonName(isAttacker)
   end
   
   return pokemon_name
-end
-
--- Helper function to check if a Pokemon is using a move that has a Custom Move Effect.
--- Either the move has not been implemented into the Simulator yet or it is too complicated 
--- (or I am too dumb). This will also check for disabled moves.
-function checkForCustomMoveEffectsOrDisabled(moves_data, selected_index, pokemon_name)
-  -- Get the selected move to check for its effects.
-  local move_effects = moves_data[selected_index].effects
-  if move_effects then
-    for effect_index=1, #move_effects do
-      local move_effect = copyTable(move_effects[effect_index])
-      if move_effect.name == status_ids.custom then
-        print(pokemon_name .. " is using a move with Custom effects. This move has not yet been implemented into the Simulator.")
-        return true
-      end
-    end
-  end
-
-  -- Check if the move is Disabled (Recharge most likely).
-  if moves_data[selected_index].status == DISABLED then
-    print(pokemon_name .. " is using a Disabled move. " .. pokemon_name .. " must be recalled (following the Battle Rules) before using this move again.")
-    return true
-  end
-
-  -- We are all good so be lazy. :)
-  return false
-end
-
--- This function will check for and decrement sleep counters. 
-function resolveSleepCounters(isAttacker)
-  -- Figure out which data we care about.
-  local data = isAttacker and attackerPokemon or defenderPokemon
-
-  -- Check for existing statuses.
-  if data.status and data.status == status_ids.sleep then
-    -- Remove a status counter. This returns the count too.
-    local status_counters = removeStatusCounter(isAttacker)
-    if status_counters and status_counters <= 0 then
-      printToAll(data.name .. " is no longer asleep!", {106/255, 102/255, 187/255})
-      removeStatus(data)
-    end
-  end
-end
-
--- Helper function to check for Toxic Spikes Field Effects on a team's side that would hurt them.
--- If present then that Pokemon automatically gets Poisoned (unless Safeguard).
-function checkForToxicSpikes(attacker_name, defender_name)
-  -- Get both Field Effects.
-  local attacker_field_effect = atkFieldEffect.name
-  local defender_field_effect = defFieldEffect.name
-
-  -- Check for Toxic Spikes.
-  if attacker_field_effect == field_effect_ids.toxicspikes then
-    if attackerPokemon.status ~= nil then
-      printToAll(attacker_name .. " already has " .. attackerPokemon.status .. " so it cannot receive any other statuses.")
-    elseif attacker_field_effect ~= field_effect_ids.safeguard then
-      -- Add the Poison status.
-      printToAll(attacker_name .. " was poisoned due to " .. field_effect_ids.toxicspikes .. ".", {170/255, 85/255, 153/255})
-      addStatus(ATTACKER, status_ids.poison)
-    else
-      printToAll(attacker_name .. " has Safeguard and cannot be Poisoned.")
-    end
-  end
-  if defender_field_effect == field_effect_ids.toxicspikes then
-    if defenderPokemon.status ~= nil then
-      printToAll(defender_name .. " already has " .. defenderPokemon.status .. " so it cannot receive any other statuses.")
-    elseif defender_field_effect ~= field_effect_ids.safeguard then
-      -- Add the Poison status.
-      printToAll(defender_name .. " was poisoned due to " .. field_effect_ids.toxicspikes .. ".", {170/255, 85/255, 153/255})
-      addStatus(DEFENDER, status_ids.poison)
-    else
-      printToAll(defender_name .. " has Safeguard and cannot be Poisoned.")
-    end
-  end
-end
-
--- This function takes in the effects of the selected move and returns if the move
--- has priority and/or protect. Notice it returns multiple values.
-function checkForPriorityAndProtect(move_effects, effect_roll)
-  local protect = false
-  local priority = false
-  if move_effects then
-    for def_effect_index=1, #move_effects do
-      local move_effect = copyTable(move_effects[def_effect_index])
-
-      -- Check for Protection.
-      if move_effect.name == status_ids.protection and move_effect.target == status_ids.the_self then
-        if (move_effect.chance and effect_roll >= move_effect.chance) or move_effect.chance == nil then
-          protect = true
-          break
-        end
-      -- Check if the Attacker has priority.
-      elseif move_effect.name == status_ids.priority and move_effect.target == status_ids.the_self then
-        if (move_effect.chance and effect_roll >= move_effect.chance) or move_effect.chance == nil then
-          priority = true
-          break
-        end
-      end
-    end
-  end
-
-  return priority, protect
-end
-
--- Helper function to check if a Pokemon is applying statuses that could prevent the enemy 
--- from using their move. This function returns true if a new status is being applied.
-function checkForNewPreventingMoveEffects(params)
-  -- Get the opponent Field Effects.
-  local opponent_field_effect = atkFieldEffect.name
-  if params.isAttacker then
-    opponent_field_effect = defFieldEffect.name
-  end
-
-  -- Track if the a new status is applied.
-  local is_new_status = false
-  if params.move_effects then
-    for effect_index=1, #params.move_effects do
-      local move_effect = copyTable(params.move_effects[effect_index])
-      -- Check if the Pokemon is trying to Paralyze.
-      if move_effect.name == status_ids.paralyze and move_effect.target == status_ids.enemy then
-        -- Check if the Opponent has Safeguard.
-        if opponent_field_effect == field_effect_ids.safeguard then
-          printToAll(params.pokemon_name .. "'s opponent has Safeguard and cannot be Paralyzed.")
-        -- Roll to paralyze the enemy. Print with the same color we use for Querying an Electric type Pokemon.
-        elseif roll_status(params.isAttacker, move_effect, params.pokemon_name, params.effect_roll, false, {255/255, 204/255, 51/255}) then
-          addStatus(not params.isAttacker, move_effect.name)
-          is_new_status = true
-        end
-      -- Check if the Pokemon is trying to put the Defender to sleep.
-      elseif move_effect.name == status_ids.sleep and move_effect.target == status_ids.enemy then
-        -- Check if the Opponent has Safeguard.
-        if opponent_field_effect == field_effect_ids.safeguard then
-          printToAll(params.pokemon_name .. "'s opponent has Safeguard and cannot be put to Sleep.")
-        -- Roll to put the enemy to sleep. Print with the same color we use for Querying a Ghost type Pokemon.
-        elseif roll_status(params.isAttacker, move_effect, params.pokemon_name, params.effect_roll, false, {106/255, 102/255, 187/255}) then
-          addStatus(not params.isAttacker, move_effect.name)
-          is_new_status = true
-        end
-      -- Check if the Pokemon is trying to freeze the Defender.
-      elseif move_effect.name == status_ids.freeze and move_effect.target == status_ids.enemy then
-        -- Check if the Opponent has Safeguard.
-        if opponent_field_effect == field_effect_ids.safeguard then
-          printToAll(params.pokemon_name .. "'s opponent has Safeguard and cannot be Frozen.")
-        -- Roll to put freeze the enemy. Print with the same color we use for Querying an Ice type Pokemon.
-        elseif roll_status(params.isAttacker, move_effect, params.pokemon_name, params.effect_roll, false, {102/255, 204/255, 255/255}) then
-          addStatus(not params.isAttacker, move_effect.name)
-          is_new_status = true
-        end
-      -- Ice Fang. First roll attempts to trigger. If it triggers, the second-roll causes Disadvantage for odd and Freeze for Even.
-      elseif move_effect.name == status_ids.iceFang and move_effect.target == status_ids.enemy then
-        -- Roll for the effect. Print with the same color we use for Querying an Ice type Pokemon.
-        if roll_status(params.isAttacker, move_effect, params.pokemon_name, params.effect_roll, false, {102/255, 204/255, 255/255}) then
-          -- Roll again.
-          local second_roll = math.random(1, 6)
-          if second_roll % 2 == 0 then
-            -- Log the roll.
-            printToAll(params.pokemon_name .. " is rolling for Ice Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Freeze!", {102/255, 204/255, 255/255})
-            -- Check if the Opponent has Safeguard.
-            if opponent_field_effect == field_effect_ids.safeguard then
-              printToAll(params.pokemon_name .. "'s opponent has Safeguard and cannot be Frozen.")
-            else
-              -- Freeze.
-              addStatus(not params.isAttacker, status_ids.freeze)
-              is_new_status = true
-            end
-          else
-            -- Disadvantage.
-            printToAll(params.pokemon_name .. " is rolling for Ice Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Disadvantage!")
-            if opponent_field_effect == field_effect_ids.mist then
-              printToAll(params.pokemon_name .. "'s opponent has Mist and is immune to Disadvantage.")
-            elseif params.opponent_priority then
-              printToAll(params.pokemon_name .. "'s opponent has Priority and is immune to Disadvantage.")
-            else
-              -- Get the opponent diceMod value.
-              local opponentData = params.isAttacker and defenderData or attackerData
-              opponentData.diceMod = opponentData.diceMod - 1
-            end
-          end
-        end
-      -- Thunder Fang. First roll attempts to trigger. If it triggers, the second-roll causes Disadvantage for odd and Paralysis for Even.
-      elseif move_effect.name == status_ids.thunderFang and move_effect.target == status_ids.enemy then
-        -- Roll for the effect. Print with the same color we use for Querying an Ice type Pokemon.
-        if roll_status(params.isAttacker, move_effect, params.pokemon_name, params.effect_roll, false, {255/255, 204/255, 51/255}) then
-          -- Roll again.
-          local second_roll = math.random(1, 6)
-          if second_roll % 2 == 0 then
-            -- Log the roll.
-            printToAll(params.pokemon_name .. " is rolling for Thunder Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Paralysis!", {255/255, 204/255, 51/255})
-            -- Check if the Opponent has Safeguard.
-            if opponent_field_effect == field_effect_ids.safeguard then
-              printToAll(params.pokemon_name .. "'s opponent has Safeguard and cannot be Paralyzed.")
-            else
-              -- Paralysis.
-              addStatus(not params.isAttacker, status_ids.paralyze)
-              is_new_status = true
-            end
-          else
-            -- Disadvantage.
-            printToAll(params.pokemon_name .. " is rolling for Thunder Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Disadvantage!")
-            if opponent_field_effect == field_effect_ids.mist then
-              printToAll(params.pokemon_name .. "'s opponent has Mist and is immune to Disadvantage.")
-            elseif params.opponent_priority then
-              printToAll(params.pokemon_name .. "'s opponent has Priority and is immune to Disadvantage.")
-            else
-              -- Get the opponent diceMod value.
-              local opponentData = params.isAttacker and defenderData or attackerData
-              opponentData.diceMod = opponentData.diceMod - 1
-            end
-          end
-        end
-      end
-    end
-  end
-
-  return is_new_status
-end
-
--- Helper function to roll for a particular status.
-function roll_status(isAttacker, move_effect, pokemon_name, effect_roll, for_self, print_color)
-  -- The color to print this log. If nil, white while be used.
-  if not print_color then
-    print_color = "White"
-  end
-
-  local perspective = "themself"
-  if not for_self then
-    perspective = "their opponent"
-  end
-  local team_that_gets_status = not isAttacker
-  if for_self then
-    team_that_gets_status = not team_that_gets_status
-  end
-
-  -- Initialize the effect outcome.
-  local effect_success = false
-
-  -- Check if this is conditional .
-  if move_effect.chance then
-    local outcome = "FAIL!"
-    if effect_roll >= move_effect.chance then
-      outcome = "SUCCESS!"
-      effect_success = true
-    end
-    printToAll(pokemon_name .. " is attempting to " .. move_effect.name .. " " .. perspective .. ", rolls " .. tostring(effect_roll) .. ".. " .. outcome, print_color)
-    return effect_success
-  else
-    -- Unconditional.
-    printToAll(pokemon_name .. " has given " .. perspective .. " " .. move_effect.name .. ".", print_color)
-    return true
-  end
-
-  return false
-end
-
--- Helper function to check if a Pokemon is applying statuses that do not prevent their opponent from 
--- using their move.
-function checkForNewMoveEffects(isAttacker, move_effects, pokemon_name, effect_roll, opponent_priority)
-  -- Get the Field Effects.
-  local self_field_effect = isAttacker and atkFieldEffect.name or defFieldEffect.name
-  local opponent_field_effect = isAttacker and defFieldEffect.name or atkFieldEffect.name
-
-  -- Track if a new status was given.
-  local new_effect_status = false
-  
-  for effect_index=1, #move_effects do
-    local move_effect = copyTable(move_effects[effect_index])
-    -- Curse attempts. Status Card effect.
-    if not new_effect_status and move_effect.name == status_ids.curse and move_effect.target == status_ids.enemy then
-      -- Check if the Opponent has Safeguard.
-      if opponent_field_effect == field_effect_ids.safeguard then
-        printToAll(pokemon_name .. "'s opponent has Safeguard and cannot be Cursed.")
-      elseif roll_status(isAttacker, move_effect, pokemon_name, effect_roll, false) then
-        addStatus(not isAttacker, move_effect.name, {106/255, 102/255, 187/255})
-        new_effect_status = true
-      end
-      
-    -- Burn attempts. Status Card effect.
-    elseif not new_effect_status and move_effect.name == status_ids.burn and move_effect.target == status_ids.enemy then
-      -- Check if the Opponent has Safeguard.
-      if opponent_field_effect == field_effect_ids.safeguard then
-        printToAll(pokemon_name .. "'s opponent has Safeguard and cannot be Burned.")
-      elseif roll_status(isAttacker, move_effect, pokemon_name, effect_roll, false, {255/255, 68/255, 34/255}) then
-        addStatus(not isAttacker, move_effect.name)
-        new_effect_status = true
-      end
-
-    -- Poison attempts. Status Card effect.
-    elseif not new_effect_status and move_effect.name == status_ids.poison and move_effect.target == status_ids.enemy then
-      -- Check if the Opponent has Safeguard.
-      if opponent_field_effect == field_effect_ids.safeguard then
-        printToAll(pokemon_name .. "'s opponent has Safeguard and cannot be Poisoned.")
-      elseif roll_status(isAttacker, move_effect, pokemon_name, effect_roll, false, {170/255, 85/255, 153/255}) then
-        addStatus(not isAttacker, move_effect.name)
-        new_effect_status = true
-      end
-
-    -- Confusion attempts. Status Card effect.
-    elseif not new_effect_status and move_effect.name == status_ids.confuse then
-      if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, move_effect.target == status_ids.the_self, {136/255, 153/255, 255/255}) then
-        -- Attempted to confuse yourself. What a dummy.
-        if move_effect.target == status_ids.the_self then
-          -- Check if this Pokemon has Safeguard.
-          if self_field_effect == field_effect_ids.safeguard then
-            printToAll(pokemon_name .. " has Safeguard and cannot be Confused.")
-          else
-            addStatus(isAttacker, move_effect.name)
-          end
-        -- Attempted to confuse the opponent.
-        elseif move_effect.target == status_ids.enemy then
-          -- Check if the Opponent has Safeguard.
-          if opponent_field_effect == field_effect_ids.safeguard then
-            printToAll(pokemon_name .. "'s opponent has Safeguard and cannot be Confused.")
-          else
-            addStatus(not isAttacker, move_effect.name)
-            new_effect_status = true
-          end
-        end
-      end
-
-    -- Advantage and Double Advantage attempts. Dice manipulation.
-    elseif (move_effect.name == status_ids.advantage or move_effect.name == status_ids.doubleadvantage) and move_effect.target == status_ids.the_self then
-      if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, true) then
-        -- Perform the dice manipulation.
-        local selfData = isAttacker and attackerData or defenderData
-        if move_effect.name == status_ids.advantage then
-          selfData.diceMod = selfData.diceMod + 1
-        elseif move_effect.name == status_ids.doubleadvantage then
-          selfData.diceMod = selfData.diceMod + 2
-        end
-      end
-    -- Disadvantage and Double Disadvantage attempts. Dice manipulation.
-    elseif (move_effect.name == status_ids.disadvantage or move_effect.name == status_ids.doubledisadvantage) and move_effect.target == status_ids.enemy then
-      if opponent_priority then
-        printToAll(pokemon_name .. "'s opponent has Priority and is immune to " .. move_effect.name .. ".")
-      elseif opponent_field_effect == field_effect_ids.mist then
-        printToAll(pokemon_name .. "'s opponent has Mist and is immune to " .. move_effect.name ".")
-      else
-        if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, false) then
-          -- Perform the dice manipulation.
-          local opponentData = isAttacker and defenderData or attackerData
-          if move_effect.name == status_ids.disadvantage then
-            opponentData.diceMod = opponentData.diceMod - 1
-          elseif move_effect.name == status_ids.doubledisadvantage then
-            opponentData.diceMod = opponentData.diceMod - 2
-          end
-        end
-      end
-    -- AddDice and AddDice2 attempts. Dice manipulation.
-    elseif (move_effect.name == status_ids.addDice or move_effect.name == status_ids.addDice2) and move_effect.target == status_ids.the_self then
-      if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, true) then
-        -- Perform the dice manipulation.
-        local selfData = isAttacker and attackerData or defenderData
-        if move_effect.name == status_ids.addDice then
-          -- Get this Pokemon's diceMod value.
-          selfData.addDice = selfData.addDice + 1
-        elseif move_effect.name == status_ids.addDice2 then
-          selfData.addDice = selfData.addDice + 2
-        end
-      end
-
-    -- Auto-KO attempts. Must consider self and enemy and priority.
-    elseif move_effect.name == status_ids.KO then
-      if move_effect.target == status_ids.enemy and opponent_priority then
-        printToAll(pokemon_name .. "'s opponent has Priority and is immune to KO.")
-      else
-        if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, move_effect.target == status_ids.the_self) then
-          -- Print KO status.
-          if move_effect.target == status_ids.the_self then
-            printToAll(pokemon_name .. " has auto-KOd themself. They will faint after this round concludes regardless of outcome.", "Red")
-          elseif opponent_priority then
-            printToAll(pokemon_name .. "'s opponent has Priority and is immune to " .. move_effect.name .. ".")
-          elseif move_effect.target == status_ids.enemy then
-            printToAll(pokemon_name .. " has auto-KOd their opponent. They will faint after this round concludes regardless of outcome.", "Red")
-          end
-        end
-      end
-
-    -- Recharge. Disable the move after selection.
-    elseif move_effect.name == status_ids.recharge then
-      -- Disable the move in text.
-      local move_index = isAttacker and attackerData.selectedMoveIndex or defenderData.selectedMoveIndex
-      local moveText = isAttacker and atkMoveText or defMoveText
-      local text = getObjectFromGUID(moveText[move_index])
-      text.TextTool.setValue(" ")
-      text.TextTool.setValue("Disabled")
-
-      -- Edit the move data.
-      local movesData = isAttacker and attackerPokemon.movesData or defenderPokemon.movesData
-      movesData[move_index].status = DISABLED
-
-    -- Enraged. Potential dice manipulation.
-    elseif move_effect.name == status_ids.enraged and move_effect.target == status_ids.the_self then
-      -- Get the opponent Attack Power level.
-      local opponentData = isAttacker and defenderData or attackerData
-      if opponentData.attackValue.movePower > 0 then
-        -- Perform the dice manipulation.
-        local selfData = isAttacker and attackerData or defenderData
-        selfData.diceMod = selfData.diceMod + 1
-      end
-
-    -- Reversal. 
-    elseif move_effect.name == status_ids.reversal and move_effect.target == status_ids.the_self then
-      -- Get the opponent move power.
-      local opponentData = isAttacker and defenderData or attackerData
-      -- Get self move power.
-      local selfData = isAttacker and attackerData or defenderData
-      -- Perform the power manipulation.
-      selfData.attackValue.movePower = selfData.attackValue.movePower + opponentData.attackValue.movePower
-      updateAttackValueCounter(isAttacker)
-
-    -- Fire Fang. First roll attempts to trigger. If it triggers, the second-roll causes Disadvantage for odd and Burn for Even.
-    elseif move_effect.name == status_ids.fireFang and move_effect.target == status_ids.enemy then
-      if roll_status(isAttacker, move_effect, pokemon_name, effect_roll, false, {255/255, 68/255, 34/255}) then
-        -- Roll again.
-        local second_roll = math.random(1, 6)
-        if second_roll % 2 == 0 then
-          printToAll(pokemon_name .. " is rolling for Fire Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Burn!", {255/255, 68/255, 34/255})
-          -- Check if the Opponent has Safeguard.
-          if opponent_field_effect == field_effect_ids.safeguard then
-            printToAll(pokemon_name .. "'s opponent has Safeguard and cannot be Burned.")
-          else
-            -- Burn.
-            addStatus(not isAttacker, status_ids.burn)
-            new_effect_status = true
-          end
-        else
-          -- Disadvantage.
-          printToAll(pokemon_name .. " is rolling for Fire Fang's effects on their opponent, rolls " .. tostring(second_roll) .. ".. Disadvantage!")
-          if not opponent_priority then
-            -- Get the opponent diceMod value.
-            local opponentData = isAttacker and defenderData or attackerData
-            opponentData.diceMod = opponentData.diceMod - 1
-          else
-            printToAll(pokemon_name .. "'s opponent has Priority and is immune to Disadvantage.")
-          end
-        end
-      end
-    end
-
-    -- TODO: Switch.
-
-    -- TODO: Stat Down.
-
-    -- TODO: D4Dice.
-  end
-
-  return new_effect_status
-end
-
--- Helper function to check for new Field Effects and apply them.
--- NOTE: Active Arena Effects table format: { name = field_effect_ids.effect, guid = XXXXXX } in attackerPokemon/defenderPokemon.
--- NOTE: This function does not currently consider the effect roll since none of the Field Effects are conditional. If that 
---       changes then the field will need to be implemented into this function.
-function applyNewFieldEffects(isAttacker, move_effects, pokemon_name, effect_roll)
-  local new_spikes = false
-
-  -- Track if the a new status is applied.
-  if move_effects then
-    for effect_index=1, #move_effects do
-      local move_effect = copyTable(move_effects[effect_index])
-
-      -- Check if this is NOT a Field effect.
-      if field_effect_ids[string.lower(move_effect.name)] ~= nil then
-        -- If the Effect is Spikes, Stealth Rock or Toxic Spikes, they go on the opposite side.
-        if move_effect.name == "Spikes" or move_effect.name == "StealthRock" or move_effect.name == "ToxicSpikes" then
-          isAttacker = not isAttacker
-        end
-
-        -- Keep track if we applied a new Spike card.
-        new_spikes = (move_effect.name == "Spikes")
-
-        -- If there is an active Field Effect, clear it.
-        clearExistingFieldEffects(isAttacker)
-
-        -- Get a tile for the new Arena Effect.
-        local tile_guid = nil
-        local faceDownNeeded = false
-        tile_guid, faceDownNeeded = getFieldEffectTileReference(move_effect.name)
-        if tile_guid then
-          -- Print the new Field Effect.
-          printToAll(pokemon_name .. " added the Field Effect " .. move_effect.name .. " to the arena.")
-
-          -- Determine the tile position.
-          local effectPosition = isAttacker and atkFieldEffectPos or defFieldEffectPos
-
-          -- Get a handle on the tile object.
-          local effect_tile = getObjectFromGUID(tile_guid)
-          if effect_tile then
-            effect_tile.setPosition(effectPosition)
-
-            -- Flip if we need to.
-            local is_face_up = Global.call("isFaceUp", effect_tile)
-            if faceDownNeeded and is_face_up then
-              effect_tile.flip()
-            elseif not faceDownNeeded and not is_face_up then
-              effect_tile.flip()
-            end
-
-            -- Add this field effect to the arena data.
-            if isAttacker then
-              atkFieldEffect = { guid = tile_guid, name = move_effect.name }
-            else
-              defFieldEffect = { guid = tile_guid, name = move_effect.name }
-            end
-          else
-            printToAll("Failed to find Field Effect Tile for " .. tostring(move_effect.name))
-          end
-        else
-          printToAll("Failed to get handle to a new Field Effect Tile for " .. tostring(move_effect.name))
-        end
-      end
-    end
-  end
-
-  return new_spikes
-end
-
--- Helper function used to get the correct Arena Effect tile and which side of the tile. This function
--- will not consider active tiles.
--- Note that this function returns the GUID and if the tile needs to be face down.
-function getFieldEffectTileReference(effect_name)
-  -- Loop through the Field Effect tile data.
-  for tile_guid, tile_data in pairs(field_effect_tile_data) do
-    -- The face up side of the tile.
-    if tile_data.effects[1] == effect_name then
-      -- If the other side had this effect then just steal it?
-      if atkFieldEffect.guid == tile_guid then
-        atkFieldEffect = { name = nil, guid = nil }
-      elseif defFieldEffect.guid == tile_guid then
-        defFieldEffect = { name = nil, guid = nil }
-      end
-      return tile_guid, false
-    -- The face down side of the tile.
-    elseif tile_data.effects[2] == effect_name then
-      -- If the other side had this effect then just steal it?
-      if atkFieldEffect.guid == tile_guid then
-        atkFieldEffect = { name = nil, guid = nil }
-      elseif defFieldEffect.guid == tile_guid then
-        defFieldEffect = { name = nil, guid = nil }
-      end
-      return tile_guid, true
-    end
-  end
-
-  return nil, nil
 end
 
 -- Helper function to clear Field Effects for a said (or both, if isAttacker is nil).
@@ -8254,770 +7332,6 @@ function clearExistingFieldEffects(isAttacker)
   end
 end
 
--- Helper function to check if a Pokemon has an existing status that could prevent them from using their move.
-function resolveExistingPreventingEffects(params)
-  -- Get the Pokemon data.
-  local pokemon_data = params.isAttacker and attackerPokemon or defenderPokemon
-  local arena_data = params.isAttacker and attackerData or defenderData
-  arena_data.canSelectMove = true
-
-  -- Loop through the potential statuses.
-  if pokemon_data.status and pokemon_data.status == status_ids.paralyze then
-    if (params.is_new_status and not params.pokemon_priority) or not params.is_new_status then
-      local paralysis_save = math.random(1, 4)
-      printToAll(params.pokemon_name .. " rolled a " .. tostring(paralysis_save) .. " for its Paralysis save.")
-      if paralysis_save == 1 then
-        -- Print with the same color we use for Querying an Electric type Pokemon.
-        printToAll(params.pokemon_name .. " is paralyzed! It can't move!", {255/255, 204/255, 51/255})
-        arena_data.canSelectMove = false
-        
-        -- Flip over Paralyzed status card since the Pokemon is stunned.
-        flipStatus(params.isAttacker, true)
-      else
-        -- Flip over Paralyzed status card since the Pokemon is not stunned.
-        flipStatus(params.isAttacker, false)
-      end
-    else
-      -- Flip over Paralyzed status card since the Pokemon is not stunned.
-      flipStatus(params.isAttacker, false)
-    end
-  elseif pokemon_data.status and pokemon_data.status == status_ids.sleep then
-    if (params.is_new_status and not params.pokemon_priority) or (not params.is_new_status and params.pokemon_priority and Global.call("isFaceUp", pokemon_data.statusCardGUID)) then
-      -- Determine sleep duration.
-      local sleep_turns = math.random(1, 4)
-      printToAll(params.pokemon_name .. " rolled a " .. tostring(sleep_turns) .. " for its Sleep count roll.")
-      -- Print with the same color we use for Querying a Ghost type Pokemon.
-      printToAll(params.pokemon_name .. " is fast asleep. (" .. tostring(sleep_turns) .. " turns)", {106/255, 102/255, 187/255})
-      arena_data.canSelectMove = false
-      
-      -- Apply sleep counters and flip the status card.
-      -- TODO: Priority causes an error here. Priority situations should not get here in the logic.
-      flipStatus(params.isAttacker, true)
-      addStatusCounters(params.isAttacker, sleep_turns)
-    elseif not params.is_new_status then
-      -- Determine how much longer Pokemon is asleep.
-      local sleep_turns_remaining = countStatusCounters(isAttacker)
-      if sleep_turns_remaining ~= nil then
-        -- Print with the same color we use for Querying a Ghost type Pokemon.
-        printToAll(params.pokemon_name .. " is fast asleep. (" .. tostring(sleep_turns_remaining) .. " turns)", {106/255, 102/255, 187/255})
-        arena_data.canSelectMove = false
-      end
-    end
-  elseif pokemon_data.status and pokemon_data.status == status_ids.freeze then
-    if params.is_new_status and not params.pokemon_priority then
-      printToAll(params.pokemon_name .. " is frozen solid!")
-      arena_data.canSelectMove = false
-    elseif not params.is_new_status then
-      local freeze_save = math.random(1, 4)
-      printToAll(params.pokemon_name .. " rolled a " .. tostring(freeze_save) .. " for its Freeze save.")
-      if freeze_save < 4 then
-        -- Print with the same color we use for Querying an Ice type Pokemon.
-        printToAll(params.pokemon_name .. " is frozen solid!", {102/255, 204/255, 255/255})
-        arena_data.canSelectMove = false
-      else
-        printToAll(params.pokemon_name .. " is no longer frozen!", {102/255, 204/255, 255/255})
-
-        -- Discard frozen status card.
-        removeStatus(pokemon_data)
-      end
-    end
-  end
-end
-
--- Helper function that adjusts attack values based on move effects.
--- Field Effects are resolved in resolveExistingFieldEffects().
-function adjustAttackValue(isAttacker, has_priority, is_new_status, pokemon_name)
-  -- Get the relevant data.
-  local selfData = isAttacker and attackerData or defenderData
-
-  -- Check if this Pokemon has the Burn status.
-  local data = isAttacker and attackerPokemon or defenderPokemon
-  if data.status and data.status == status_ids.burn then
-    if is_new_status and has_priority then
-      printToAll(pokemon_name .. " has Priority so Burn did not reduce its Attack Strength by 1.")
-    else
-      selfData.attackValue.movePower = selfData.attackValue.movePower - 1
-      if selfData.attackValue.movePower < 0 then selfData.attackValue.movePower = 0 end
-      printToAll(pokemon_name .. "'s Attack Strength was reduced by 1 due to Burn (minimum of 0).", {255/255, 68/255, 34/255})
-      updateAttackValueCounter(isAttacker)
-    end
-  end
-end
-
--- Helper function that resolves existing field effects and adjusts move strength accordingly.
--- This includes everything except Safeguard, Toxic Spikes and Mist.
-function resolveExistingFieldEffects(attacker_params, defender_params)
-  -- Combine the two for easier checking.
-  local field_effects = { atkFieldEffect, defFieldEffect }
-  local pokemon_params = { attacker_params, defender_params }
-
-  -- Check if we are playing Dual Type mode.
-  local pokemon_types = copyTable({pokemon_params[1].types, pokemon_params[2].types})
-  local dual_type_enabled = Global.call("getDualTypeEffectiveness")
-  if dual_type_enabled then
-    -- Do some safety checks.
-    if #pokemon_types[1] == 1 then
-      pokemon_types[1][2] = "None"
-    end
-    if #pokemon_types[2] == 1 then
-      pokemon_types[2][2] = "None"
-    end
-  end
-
-  -- Loop through the effects.
-  for field_index = 1, #field_effects do
-    -- Get the correct data.
-    local self_data = (field_index == 1) and attackerData or defenderData
-    local pokemon_name = pokemon_params[field_index].name
-    local pokemon_move_type = pokemon_params[field_index].move_type
-    local new_spikes = pokemon_params[field_index].new_spikes
-
-    -- Check for Spikes. This applies to only the Pokemon on this side. This only applies when a Pokemon enters.
-    if field_effects[field_index].name == field_effect_ids.spikes and currRound == 1 and not new_spikes then
-      -- Perform the power manipulation.
-      self_data.attackValue.movePower = self_data.attackValue.movePower - 1
-      if self_data.attackValue.movePower < 0 then self_data.attackValue.movePower = 0 end
-      updateAttackValueCounter(field_index == 1)   -- field_index will equal 1 for the Attacker. 
-      printToAll(pokemon_name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.spikes .. " (minimum of 0).", {221/255, 187/255, 85/255})
-    -- Check for Electric Terrain. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.electricterrain then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Electric" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.electricterrain .. ".", {255/255, 204/255, 51/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Electric" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.electricterrain .. ".", {255/255, 204/255, 51/255})
-      end
-    -- Check for Grass Terrain. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.grassyterrain then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Grass" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.grassyterrain .. ".", {119/255, 204/255, 85/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Grass" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.grassyterrain .. ".", {119/255, 204/255, 85/255})
-      end
-    -- Check for Hail. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.hail then
-      -- Attacker first.
-      if pokemon_params[1].types[1] ~= "Ice" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[1].types[2] ~= "Ice")) then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.hail .. ".", {102/255, 204/255, 255/255})
-      end
-      -- Defender.
-      if pokemon_params[2].types[1] ~= "Ice" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[2].types[2] ~= "Ice")) then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.hail .. ".", {102/255, 204/255, 255/255})
-      end
-    -- Check for Psychic Terrain. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.psychicterrain then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Psychic" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.psychicterrain .. ".", {255/255, 85/255, 153/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Psychic" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.psychicterrain .. ".", {255/255, 85/255, 153/255})
-      end
-    -- Check for Rain. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.rain then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Water" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
-      elseif pokemon_params[1].move_type == "Fire" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Water" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
-      elseif pokemon_params[2].move_type == "Fire" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.rain .. ".", {51/255, 153/255, 255/255})
-      end
-    -- Check for Harsh Sunlight. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.harshsunlight then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Fire" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
-      elseif pokemon_params[1].move_type == "Water" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Fire" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
-      elseif pokemon_params[2].move_type == "Water" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.harshsunlight .. ".", {255/255, 68/255, 34/255})
-      end
-    -- Check for Sandstorm. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.sandstorm then
-      -- Attacker first. Sorry :/
-      if pokemon_params[1].types[1] ~= "Ground" and pokemon_params[1].types[1] ~= "Rock" and pokemon_params[1].types[1] ~= "Steel" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[1].types[2] ~= "Ground" and pokemon_params[1].types[2] ~= "Rock" and pokemon_params[1].types[2] ~= "Steel")) then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.sandstorm .. ".", {187/255, 170/255, 102/255})
-      end
-      -- Defender. Sorry :/
-      if pokemon_params[2].types[1] ~= "Ground" and pokemon_params[2].types[1] ~= "Rock" and pokemon_params[2].types[1] ~= "Steel" and (not dual_type_enabled or (dual_type_enabled and pokemon_params[2].types[2] ~= "Ground" and pokemon_params[2].types[2] ~= "Rock" and pokemon_params[2].types[2] ~= "Steel")) then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.sandstorm .. ".", {187/255, 170/255, 102/255})
-      end
-    -- Check for Stealth Rock. This applies to only the Pokemon on this side.
-    elseif field_effects[field_index].name == field_effect_ids.stealthrock then
-      local total_reduction = 0
-      -- Steel, Ground and Fighting resist.
-      if (pokemon_types[field_index][1] == "Flying" or pokemon_types[field_index][1] == "Bug" or pokemon_types[field_index][1] == "Fire" or pokemon_types[field_index][1] == "Ice") or (dual_type_enabled and (pokemon_types[field_index][2] == "Flying" or pokemon_types[field_index][2] == "Bug" or pokemon_types[2] == "Fire" or pokemon_types[field_index][2] == "Ice")) then
-        total_reduction = total_reduction + 2
-      elseif (pokemon_types[field_index][1] == "Steel" or pokemon_types[field_index][1] == "Ground" or pokemon_types[field_index][1] == "Fighting") then
-        -- No reduction.
-      else
-        total_reduction = total_reduction + 1
-      end
-      if dual_type_enabled then
-        if pokemon_types[field_index][2] == "Steel" or pokemon_types[field_index][2] == "Ground" or pokemon_types[field_index][2] == "Fighting" or pokemon_types[field_index][2] == "None" then
-          -- No reduction.
-        else
-          total_reduction = total_reduction + 1
-        end
-      end
-
-      -- Do the final calculation.
-      if total_reduction > 0 then
-        if total_reduction > 2 then total_reduction = 2 end
-        self_data.attackValue.movePower = self_data.attackValue.movePower - total_reduction
-        if self_data.attackValue.movePower < 0 then self_data.attackValue.movePower = 0 end
-        updateAttackValueCounter(field_index == 1)   -- field_index will equal 1 for the Attacker. 
-        printToAll(pokemon_name .. "'s Attack Strength was reduced by " .. tostring(total_reduction) .. " due to " .. field_effect_ids.stealthrock .. " (minimum of 0).", {187/255, 170/255, 102/255})
-      else
-        printToAll(pokemon_name .. " completely resisted " .. field_effect_ids.stealthrock .. ".")
-      end
-    -- Check for Misty Terrain. This applies to both Pokemon if it is present.
-    elseif field_effects[field_index].name == field_effect_ids.mistyterrain then
-      -- Attacker first.
-      if pokemon_params[1].move_type == "Fairy" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower + 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
-      elseif pokemon_params[1].move_type == "Dragon" then
-        -- Perform the power manipulation.
-        attackerData.attackValue.movePower = attackerData.attackValue.movePower - 1
-        updateAttackValueCounter(ATTACKER)
-        printToAll(pokemon_params[1].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
-      end
-      -- Defender.
-      if pokemon_params[2].move_type == "Fairy" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower + 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was increased by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
-      elseif pokemon_params[2].move_type == "Dragon" then
-        -- Perform the power manipulation.
-        defenderData.attackValue.movePower = defenderData.attackValue.movePower - 1
-        updateAttackValueCounter(DEFENDER)
-        printToAll(pokemon_params[2].name .. "'s Attack Strength was reduced by 1 due to " .. field_effect_ids.mistyterrain .. ".", {238/255, 153/255, 238/255})
-      end
-    end
-  end
-end
-
--- This function will increment and decrement existing statuses that do not prevent moves.
-function incrementStatusCounters(isAttacker, new_status, has_priority)
-  -- Figure out which data we care about.
-  local data = isAttacker and attackerPokemon or defenderPokemon
-
-  -- Check for existing statuses.
-  if data.status then
-    if data.status == status_ids.curse and (not has_priority or not new_status) then
-      -- Add 1 status counter.
-      addStatusCounters(isAttacker, 1)
-
-      -- Curse status counters get applied at the end of a battle round. So, count the.. counters.
-      local status_counters = countStatusCounters(isAttacker)
-
-      -- If there are 2, the Pokemon faints.
-      if status_counters and status_counters >= 2 then
-        printToAll(data.name .. " fainted due to Curse!", {106/255, 102/255, 187/255})
-      end
-    elseif data.status == status_ids.burn and (not has_priority or not new_status) then
-      -- Add 1 status counter.
-      addStatusCounters(isAttacker, 1)
-
-      -- Burn status counters get applied at the end of a battle round. So, count the.. counters.
-      local status_counters = countStatusCounters(isAttacker)
-
-      -- If there are 4, the Pokemon faints.
-      if status_counters and status_counters >= 4 then
-        printToAll(data.name .. " fainted due to Burn!", {255/255, 68/255, 34/255})
-      end
-    elseif data.status == status_ids.poison and (not has_priority or not new_status) then
-      -- Add 1 status counter.
-      addStatusCounters(isAttacker, 1)
-
-      -- Poison status counters get applied at the end of a battle round. So, count the.. counters.
-      local status_counters = countStatusCounters(isAttacker)
-
-      -- If there are 4, the Pokemon faints.
-      if status_counters and status_counters >= 4 then
-        printToAll(data.name .. " fainted due to Poison!", {170/255, 85/255, 153/255})
-      end
-    end
-  end
-end
-
--- Function to simulate dice rolls.
-function simulate_dice_rolls_logs(isAttacker, dice_type, pokemon_name)
-  -- Get the data we care about.
-  local data = isAttacker and attackerData or defenderData
-  local pokemon = isAttacker and attackerPokemon or defenderPokemon
-
-  -- Get the AutoRoll values.
-  local auto_roll_counts = isAttacker and atkAutoRollCounts or defAutoRollCounts
-
-  -- Initialize the dice to roll.
-  auto_roll_counts.blue = 0
-  auto_roll_counts.white = 0
-  auto_roll_counts.purple = 0
-  auto_roll_counts.red = 0
-
-  -- Attacker rolls first. If they have addDice then the rules are a bit different.
-  local dice_count = 1
-  dice_count = dice_count + math.abs(data.addDice)
-  dice_count = dice_count + math.abs(data.diceMod)
-
-  -- Check which dice we are rolling.
-  local print_color = nil
-  -- If there is a preventing status there is always a White D6 for the attack roll.
-  if not data.canSelectMove or dice_type == 6 then
-    auto_roll_counts.white = dice_count
-    print_color = "White"
-  elseif dice_type == 8 then
-    auto_roll_counts.blue = dice_count
-    print_color = "Blue"
-  elseif dice_type == 4 then
-    auto_roll_counts.purple = dice_count
-    print_color = "Purple"
-  else
-    -- Unrecognized roll type.
-    local side = "Defender"
-    if isAttacker then
-      side = "Attacker"
-    end
-    print("The " .. side .. " move has a weird dice type listed that cannot be simualted (" .. tostring(dice_type) .. "). Notify the developers, plz. :)")
-    return
-  end
-
-  -- Roll and print the results.
-  printToAll(pokemon_name .. " rolled: ")
-  local rolls = auto_roll_logs(isAttacker)
-  
-  -- Check if we need to ignore any highest or lowest dice rolls.
-  if data.diceMod ~= 0 then
-    -- Sort the rolls.
-    table.sort(rolls)
-
-    -- Remove lowest X rolls.
-    if data.diceMod > 0 then
-      for index=1, data.diceMod do
-        table.remove(rolls, 1)
-      end
-    -- Remove highest X rolls.
-    elseif data.diceMod < 0 then
-      for index=math.abs(data.diceMod), 1, -1 do
-        table.remove(rolls, #rolls)
-      end
-    end
-  end
-
-  -- Check if we need to add the remaining dice.
-  if data.addDice == 1 or data.addDice == 2 then
-    -- Sanity check.
-    if #rolls ~= data.addDice then
-      print("Adding " .. tostring(data.addDice) .. " dice together but " .. tostring(#rolls) .. " are remaining.")
-    end
-    
-    -- Add the dice together.
-    local temp_rolls = copyTable(rolls)
-    local roll_value = 0
-    for index=1, #temp_rolls do
-      roll_value = roll_value + temp_rolls[index]
-    end
-    rolls = { roll_value }
-  end
-
-  -- Print the remaining logs.
-  if data.diceMod ~= 0 or data.addDice ~= 0 then
-    if #rolls > 0 then
-      local roll_string = ""
-      for index=1, #rolls do
-        roll_string = roll_string .. " " .. tostring(rolls[index])
-      end
-      printToAll("Adjusting for Disadvantage/Advantage/AddDice, " .. pokemon_name .. " rolled: ")
-      printToAll(roll_string, print_color)
-    end
-  end
-
-  -- There should only be one value remaining here.
-  if #rolls ~= 1 then
-    print("Adding final roll value to counter but " .. tostring(#rolls) .. " remain.")
-  end
-
-  -- Update the counter.
-  data.attackValue.attackRoll = rolls[1]
-
-  -- Log it all.
-  local totalAttack = data.attackValue.level + data.attackValue.movePower + data.attackValue.effectiveness + data.attackValue.attackRoll + data.attackValue.item
-  printToAll(pokemon_name .. " hits for " .. totalAttack .. " Attack!")
-  local calcString = data.attackValue.attackRoll .. " + " .. data.attackValue.level .. " (lvl) + " .. data.attackValue.movePower .. " (move)"
-  if data.attackValue.effectiveness ~= 0 then
-    if data.attackValue.effectiveness > 2 then
-      calcString = calcString .. " + " .. data.attackValue.effectiveness .. " (Super-Effective)"
-    elseif data.attackValue.effectiveness > 0 then
-      calcString = calcString .. " + " .. data.attackValue.effectiveness .. " (Effective)"
-    elseif data.attackValue.effectiveness < -2 then
-      calcString = calcString .. " - " .. math.abs(data.attackValue.effectiveness) .. " (Super-Weak)"
-    else
-      calcString = calcString .. " - " .. math.abs(data.attackValue.effectiveness) .. " (Weak)"
-    end
-  end
-  if data.attackValue.item ~= 0 then
-    calcString = calcString .. " + " .. data.attackValue.item  .. " (item)"
-  end
-  printToAll(calcString)
-
-  -- Update the counter.
-  updateAttackValueCounter(isAttacker)
-  printToAll("")
-end
-
--- Simple helper function to adjust attack values for Confusion.
-function resolve_confusion(isAttacker, self_name, opponent_name)
-  -- Get a handle on the pokemon data and arena data we need.
-  local self_status = isAttacker and attackerPokemon or defenderPokemon
-  if not self_status then
-    return
-  end
-  self_status = self_status.status
-  local self_data = isAttacker and attackerData or defenderData
-  local opponent_data = isAttacker and defenderData or attackerData
-  
-  -- Check for confusion.
-  if self_status == status_ids.confuse then
-    if attackerData.attackValue.attackRoll % 2 == 1 then
-      -- Perform the Attack Power adjustment.
-      printToAll(self_name .. " is confused! " .. opponent_name .. " also gets its Attack Strength!")
-      opponent_data.attackValue.attackRoll = opponent_data.attackValue.attackRoll + self_data.attackValue.attackRoll
-
-      -- Update the counter.
-      updateAttackValueCounter(not isAttacker)
-    end
-  end
-end
-
-function simulateRound(obj, color, alt)
-  -- Check if auto rollers are enabled.
-  local rivalEventPokeball = getObjectFromGUID("432e69")
-  if not rivalEventPokeball then
-    print("Failed to find Rival Event Pokeball")
-  end
-
-  -- Determine the simulator type.
-  if rivalEventPokeball.call("get_auto_roller_type") ~= 3 then return end
-
-  -- Get Attacker selected move.
-  local atk_selected_move_index = attackerData.selectedMoveIndex
-  if not atk_selected_move_index or (atk_selected_move_index < 1 and atk_selected_move_index > 4) then
-    printToAll("Select an Attacker move before using the Simulator")
-    return
-  end
-
-  -- Get Defender selected move.
-  local def_selected_move_index = defenderData.selectedMoveIndex
-  if not def_selected_move_index or (def_selected_move_index < 1 and def_selected_move_index > 4) then
-    printToAll("Select a Defender move before using the Simulator")
-    return
-  end
-  
-  -- Create the Pokemon names for easier logging.
-  local attacker_name = constructPokemonName(ATTACKER)
-  local defender_name = constructPokemonName(DEFENDER)
-
-  -- Collect the Attacker move effect(s).
-  local atk_dice_type = attackerPokemon.movesData[atk_selected_move_index].dice
-  local atk_selected_move_effects = attackerPokemon.movesData[atk_selected_move_index].effects
-
-  -- Collect the Defender move effect(s).
-  local def_dice_type = defenderPokemon.movesData[def_selected_move_index].dice
-  local def_selected_move_effects = defenderPokemon.movesData[def_selected_move_index].effects
-
-  -- Check if either Pokemon is using a move that has not been implemented into the Simulator yet. Or disabled moves.
-  if checkForCustomMoveEffectsOrDisabled(attackerPokemon.movesData, atk_selected_move_index, attacker_name) then return end
-  if checkForCustomMoveEffectsOrDisabled(defenderPokemon.movesData, def_selected_move_index, defender_name) then return end
-
-  -- Update the battle round.
-  setRound(currRound + 1)
-
-  -- Just in case, lets roll both user's own effect die. This value might not even be needed but we only want to do this once.
-  local attacker_effect_roll = math.random(1, 6)
-  local defender_effect_roll = math.random(1, 6)
-
-  -- Resolve Sleep status counters. This is the only effect that decrements counters at the start of combat.
-  resolveSleepCounters(ATTACKER)
-  resolveSleepCounters(DEFENDER)
-
-  -- If this is the first round, check for existing Field Effects that punish a team.
-  if currRound == 1 then
-    checkForToxicSpikes(attacker_name, defender_name)
-  else
-    -- This is mostly used to re-initialize the move values.
-    selectMove(atk_selected_move_index, ATTACKER)
-    selectMove(def_selected_move_index, DEFENDER)
-  end
-
-  -- Check if either Pokemon has Priority or Protect.
-  printToAll(" -- Resolving Priority and Protection -- ", {169/255, 169/255, 169/255})
-
-  -- Attacker.
-  local attacker_priority = false
-  local attacker_protect = false
-  attacker_priority, attacker_protect = checkForPriorityAndProtect(atk_selected_move_effects, attacker_effect_roll)
-  -- Print if the Attacker has priority.
-  if attacker_priority then
-    printToAll(attacker_name .. " has priority.")
-  end
-
-  -- Defender.
-  local defender_priority = false
-  local defender_protect = false
-  defender_priority, defender_protect = checkForPriorityAndProtect(def_selected_move_effects, defender_effect_roll)
-  -- Print if the Defender has priority.
-  if defender_priority then
-    printToAll(defender_name .. " has priority.")
-  end
-
-  -- Update move powers if Protect was used.
-  if attacker_protect then
-    defenderData.attackValue.movePower = 0
-    printToAll(defender_name .. "'s Move Power has been set to 0 because of " .. attacker_name .. " Protection.")
-  end
-  if defender_protect then
-    attackerData.attackValue.movePower = 0
-    printToAll(attacker_name .. "'s Move Power has been set to 0 because of " .. defender_name .. " Protection.")
-  end
-  
-  -- Resolve Attacker Status effects.
-  printToAll(" -- Resolving Existing Status Effects on the Attacker -- ", {169/255, 169/255, 169/255})
-  -- Init params.
-  local resolve_params = {
-    isAttacker = ATTACKER,
-    pokemon_priority = attacker_priority,
-    is_new_status = false,
-    pokemon_name = attacker_name
-  }
-  resolveExistingPreventingEffects(resolve_params)
-
-  -- Check if the Attacker has move effects that may prevent the Defender from using its move.
-  printToAll(" -- Resolving New Preventing Move Effects by the Attacker -- ", {169/255, 169/255, 169/255})
-  local new_defender_status = false
-  if defender_protect then
-    printToAll(defender_name .. " has Protect so it cannot receive any new statuses.")
-  elseif defenderPokemon.status ~= nil then
-    printToAll(defender_name .. " already has " .. defenderPokemon.status .. " so it cannot receive any other statuses.")
-  elseif atk_selected_move_effects and attackerData.canSelectMove then
-    -- Check for a new preventing effect by the Attacker.
-    local preventing_params = {
-      isAttacker = ATTACKER,
-      move_effects = atk_selected_move_effects,
-      pokemon_name = attacker_name,
-      effect_roll = attacker_effect_roll,
-      opponent_priority = defender_priority
-    }
-    new_defender_status = checkForNewPreventingMoveEffects(preventing_params)
-  end
-
-  -- Check for Attacker Field Effects.
-  printToAll(" -- Resolving New Field Effects by the Attacker -- ", {169/255, 169/255, 169/255})
-  local def_new_spikes
-  if attackerData.canSelectMove then
-    def_new_spikes = applyNewFieldEffects(ATTACKER, atk_selected_move_effects, attacker_name, attacker_effect_roll)
-  end
-  
-  -- Resolve Attacker Status effects.
-  printToAll(" -- Resolving Defender Status Effects -- ", {169/255, 169/255, 169/255})
-  -- Init params.
-  resolve_params = {
-    isAttacker = DEFENDER,
-    pokemon_priority = defender_priority,
-    is_new_status = new_defender_status,
-    pokemon_name = defender_name
-  }
-  resolveExistingPreventingEffects(resolve_params)
-
-  -- Log the Defender move if it has to change.
-  if not defenderData.canSelectMove then
-    printToAll(defender_name .. " now uses a typeless move with 0 Attack Power.")
-
-    -- Update the status counter.
-    defenderData.attackValue.movePower = 0
-    defenderData.attackValue.effectiveness = 0
-    updateAttackValueCounter(DEFENDER)
-
-    -- Update the move.
-    local text = getObjectFromGUID(defText)
-    text.setValue("None")
-  end
-
-  -- Check if the Defender has move effects that may prevent the Attacker from using its move.
-  printToAll(" -- Resolving New Preventing Move Effects by the Defender -- ", {169/255, 169/255, 169/255})
-  local new_attacker_status = false
-  if attacker_protect then
-    printToAll(attacker_name .. " has Protect so it cannot receive any new statuses.")
-  elseif attackerPokemon.status ~= nil then
-    printToAll(attacker_name .. " already has " .. attackerPokemon.status .. " so it cannot receive any other statuses.")
-  elseif def_selected_move_effects and defenderData.canSelectMove then
-    -- Check for a new preventing effect by the Defender.
-    local preventing_params = {
-      isAttacker = DEFENDER,
-      move_effects = def_selected_move_effects,
-      pokemon_name = defender_name,
-      effect_roll = defender_effect_roll,
-      opponent_priority = attacker_priority
-    }
-    new_attacker_status = checkForNewPreventingMoveEffects(preventing_params)
-  end
-
-  -- Check for Field Effects.
-  printToAll(" -- Resolving New Field Effects by the Defender -- ", {169/255, 169/255, 169/255})
-  local atk_new_spikes = false
-  if defenderData.canSelectMove then
-    atk_new_spikes = applyNewFieldEffects(DEFENDER, def_selected_move_effects, defender_name, defender_effect_roll)
-  end
-
-  -- Resolve initial Attacker status effects. Track if the Attacker has to handle any move effects attempting to prevent their move.
-  -- This was already called at the very beginning of the simulation for pre-existing statuses. So this will only apply to a new status
-  -- Defender has given the Attacker and if the Attacker currently gets to use their move.
-  printToAll(" -- Resolving New Attacker Status Effects -- ", {169/255, 169/255, 169/255})
-  if new_attacker_status and attackerData.canSelectMove then
-    -- Init params.
-    resolve_params = {
-      isAttacker = ATTACKER,
-      pokemon_priority = attacker_priority,
-      is_new_status = new_attacker_status,
-      pokemon_name = attacker_name
-    }
-    resolveExistingPreventingEffects(resolve_params)
-  end
-
-  -- Log the Attacker move if it has to change.
-  if not attackerData.canSelectMove then
-    printToAll(attacker_name .. " now uses a typeless move with 0 Attack Power.")
-
-    -- Update the status counter.
-    attackerData.attackValue.movePower = 0
-    attackerData.attackValue.effectiveness = 0
-    updateAttackValueCounter(ATTACKER)
-
-    -- Update the move.
-    local text = getObjectFromGUID(atkText)
-    text.setValue("None")
-  end
-
-  -- Check if the Attacker has move effects that do not prevent the Defender from choosing their move.
-  printToAll(" -- Resolving New Move Effects by the Attacker -- ", {169/255, 169/255, 169/255})
-  if defender_protect then
-    printToAll(defender_name .. " has Protect so it cannot receive any new statuses.")
-  elseif atk_selected_move_effects and attackerData.canSelectMove then
-    -- Check for a new non-preventing effect by the Attacker.
-    new_defender_status = checkForNewMoveEffects(ATTACKER, atk_selected_move_effects, attacker_name, attacker_effect_roll, defender_priority)
-  end
-
-  -- Determine any Attack Power modifications for the Defender.
-  adjustAttackValue(DEFENDER, defender_priority, new_defender_status, defender_name)
-
-  -- Check if the Defender has move effects that do not prevent the Attacker from choosing their move.
-  printToAll(" -- Resolving New Move Effects by the Attacker -- ", {169/255, 169/255, 169/255})
-  if attacker_protect then
-    printToAll(attacker_name .. " has Protect so it cannot receive any new statuses.")
-  elseif def_selected_move_effects and defenderData.canSelectMove then
-    -- Check for a new non-preventing effect by the Defender.
-    new_attacker_status = checkForNewMoveEffects(DEFENDER, def_selected_move_effects, defender_name, defender_effect_roll, attacker_priority)
-  end
-
-  -- Determine any Attack Power modifications for the Attacker.
-  adjustAttackValue(ATTACKER, attacker_priority, new_attacker_status, attacker_name)
-
-  -- Resolve existing Field Effects.
-  printToAll(" -- Resolving Existing Field Effects -- ", {169/255, 169/255, 169/255})
-  local attacker_params = { name = attacker_name, types = attackerPokemon.types, move_type = attackerPokemon.movesData[atk_selected_move_index].type, new_spikes = atk_new_spikes }
-  local defender_params = { name = defender_name, types = defenderPokemon.types, move_type = defenderPokemon.movesData[def_selected_move_index].type, new_spikes = def_new_spikes }
-  resolveExistingFieldEffects(attacker_params, defender_params)
-
-  -- Finally, roll the Attack Strength dice!
-  printToAll(" -- Performing Attack Rolls -- ", {169/255, 169/255, 169/255})
-  -- Simulate dice rolls using the logs.
-  simulate_dice_rolls_logs(ATTACKER, atk_dice_type, attacker_name)
-  simulate_dice_rolls_logs(DEFENDER, def_dice_type, defender_name)
-
-  -- Resolve Confusion.
-  printToAll(" -- Resolving Confusion -- ", {169/255, 169/255, 169/255})
-  resolve_confusion(ATTACKER, attacker_name, defender_name)
-  resolve_confusion(DEFENDER, defender_name, attacker_name)
-
-  -- Check for status Cursed, Burned or Poisoned scounters to increment.
-  printToAll(" -- Adjusting Status Counters After Round -- ", {169/255, 169/255, 169/255})
-  incrementStatusCounters(ATTACKER, new_attacker_status, attacker_priority)
-  incrementStatusCounters(DEFFENDER, new_defender_status, defender_priority)
-end
-
 -- Helper function to get a booster for a Gym Leader, etc.
 function getBooster(isAttacker, boosterName)
   -- TODO: With the expansion of boosters, boosterName is currently not considered.
@@ -9026,37 +7340,52 @@ function getBooster(isAttacker, boosterName)
   -- Get a booster from a random position in the booster deck.
   local card_index = nil
   local positionTable = isAttacker and attackerPos or defenderPos
+  local arenaPokemon = isAttacker and attackerPokemon or defenderPokemon
+
+  -- Randomly select a card from the DeckBuilder "booster" types.
+  local deckBuilder = getObjectFromGUID(DECK_BUILDER_GUID)
+  if not deckBuilder then print("Failed to find Deck Builder, cannot create booster") end
 
   -- Determine what kind of booster we are snagging.
   local booster_choice = math.random(1,100)
 
-  if booster_choice < 71 then
-    -- Randomly select a card from the DeckBuilder "booster" types.
-    local deckBuilder = getObjectFromGUID(DECK_BUILDER_GUID)
-    if deckBuilder then
+  -- Get the pokemon and arena info.
+  local pokemonData = isAttacker and attackerData or defenderData
+  local arenaData = isAttacker and attackerPokemon or defenderPokemon
+
+  -- If the Gym Leader, etc is already Tera, they are not elgible for another attach item - only one-time boosters.
+  if arenaPokemon.teraActive then
       -- Get the Booster info.
-      local booster_options = deckBuilder.call("get_gym_booster_info")
-      local booster_data = copyTable(booster_options[math.random(1, #booster_options)])
+    local booster_options = deckBuilder.call("get_one_time_gym_booster_info")
+    local one_time_booster_data = copyTable(booster_options[math.random(1, #booster_options)])
 
-      -- Generate the card using DeckBuilder's create_card().
-      local position = copyTable(positionTable)
-      local params = { card_data=booster_data, offset=false, position={position.booster[1], 1.5, position.booster[2]}, rotation={0,180,0} }
-      local booster_guid = deckBuilder.call("create_card", params)
+    -- Generate the card using DeckBuilder's create_card().
+    local position = copyTable(positionTable)
+    local params = { card_data=one_time_booster_data, offset=false, position={position.booster[1], 1.5, position.booster[2]}, rotation={0,180,0} }
+    local booster_guid = deckBuilder.call("create_card", params)
 
-      -- Add card data to the pokemon data if applicable.
-      local pokemonData = isAttacker and attackerData or defenderData
-      local arenaData = isAttacker and attackerPokemon or defenderPokemon
-      if params.card_data.name == "Vitamin" then
-        arenaData.vitamin = true
-        pokemonData.vitamin = true
-      end
+    -- Log it and save the GUID.
+    printToAll(arenaData.name .. " has a " .. one_time_booster_data.name .. "!")
+    pokemonData.boosterGuid = booster_guid
+  elseif booster_choice < 71 then
+    -- Get the Booster info.
+    local booster_options = deckBuilder.call("get_gym_booster_info")
+    local booster_data = copyTable(booster_options[math.random(1, #booster_options)])
 
-      -- Log it and save the GUID.
-      printToAll(arenaData.name .. " has a " .. booster_data.name .. "!")
-      pokemonData.boosterGuid = booster_guid
-    else
-      print("Failed to find Deck Builder, cannot create booster")
+    -- Generate the card using DeckBuilder's create_card().
+    local position = copyTable(positionTable)
+    local params = { card_data=booster_data, offset=false, position={position.booster[1], 1.5, position.booster[2]}, rotation={0,180,0} }
+    local booster_guid = deckBuilder.call("create_card", params)
+
+    -- Add card data to the pokemon data if applicable.
+    if params.card_data.name == "Vitamin" then
+      arenaData.vitamin = true
+      pokemonData.vitamin = true
     end
+
+    -- Log it and save the GUID.
+    printToAll(arenaData.name .. " has a " .. booster_data.name .. "!")
+    pokemonData.boosterGuid = booster_guid
   elseif booster_choice < 86 then
     -- TM.
     local tm_deck = getObjectFromGUID("68d25d")
@@ -9105,9 +7434,8 @@ end
 
 -- After a Gym Leader, etc. is recalled we need to discard their booster.
 function discardBooster(isAttacker)
-  local data = isAttacker and attackerData or defenderData
-
   -- Delete the booster file if we generated. Otherwise, shuffle it back into the return deck.
+  local data = isAttacker and attackerData or defenderData
   local booster = getObjectFromGUID(data.boosterGuid)
   if booster then
     if data.boosterReturnDeckGuid == nil then
@@ -9119,8 +7447,18 @@ function discardBooster(isAttacker)
     end
   end
   
-  -- Reset the booster GUID.
+  -- Reset the booster GUID and arena data.
   data.boosterGuid = nil
+  data.boosterReturnDeckGuid = nil
+  data.tmCard = nil
+  data.teraType = nil
+  data.vitamin = nil
+  data.attackValue.item = 0
+  
+  local arenaData = isAttacker and attackerPokemon or defenderPokemon
+  if arenaData then
+    arenaData.vitamin = nil
+  end
 end
 
 -- Helper function to send a Health Indicator to the arena.
@@ -9173,78 +7511,92 @@ function moveStatusButtons(visible)
   local yStatusPos = visible and 0.3 or 1000
 
   -- Show the status card buttons for the Attacker.
-  self.editButton({index=53, position={curseAtkPos.x, yStatusPos, curseAtkPos.z}})
-  self.editButton({index=54, position={burnAtkPos.x, yStatusPos, burnAtkPos.z}})
-  self.editButton({index=55, position={poisonAtkPos.x, yStatusPos, poisonAtkPos.z}})
-  self.editButton({index=56, position={sleepAtkPos.x, yStatusPos, sleepAtkPos.z}})
-  self.editButton({index=57, position={paralysisAtkPos.x, yStatusPos, paralysisAtkPos.z}})
-  self.editButton({index=58, position={frozenAtkPos.x, yStatusPos, frozenAtkPos.z}})
-  self.editButton({index=59, position={confusedAtkPos.x, yStatusPos, confusedAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusCurse, { position={curseAtkPos.x, yStatusPos, curseAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusBurn, { position={burnAtkPos.x, yStatusPos, burnAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusPoison, { position={poisonAtkPos.x, yStatusPos, poisonAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusSleep, { position={sleepAtkPos.x, yStatusPos, sleepAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusParalysis, { position={paralysisAtkPos.x, yStatusPos, paralysisAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusFrozen, { position={frozenAtkPos.x, yStatusPos, frozenAtkPos.z}})
+  edit_button(BUTTON_ID.atkStatusConfuse, { position={confusedAtkPos.x, yStatusPos, confusedAtkPos.z}})
 
   -- Show the status card buttons for the Defender.
-  self.editButton({index=60, position={curseDefPos.x, yStatusPos, curseDefPos.z}})
-  self.editButton({index=61, position={burnDefPos.x, yStatusPos, burnDefPos.z}})
-  self.editButton({index=62, position={poisonDefPos.x, yStatusPos, poisonDefPos.z}})
-  self.editButton({index=63, position={sleepDefPos.x, yStatusPos, sleepDefPos.z}})
-  self.editButton({index=64, position={paralysisDefPos.x, yStatusPos, paralysisDefPos.z}})
-  self.editButton({index=65, position={frozenDefPos.x, yStatusPos, frozenDefPos.z}})
-  self.editButton({index=66, position={confusedDefPos.x, yStatusPos, confusedDefPos.z}})
+  edit_button(BUTTON_ID.defStatusCurse, { position={curseDefPos.x, yStatusPos, curseDefPos.z}})
+  edit_button(BUTTON_ID.defStatusBurn, { position={burnDefPos.x, yStatusPos, burnDefPos.z}})
+  edit_button(BUTTON_ID.defStatusPoison, { position={poisonDefPos.x, yStatusPos, poisonDefPos.z}})
+  edit_button(BUTTON_ID.defStatusSleep, { position={sleepDefPos.x, yStatusPos, sleepDefPos.z}})
+  edit_button(BUTTON_ID.defStatusParalysis, { position={paralysisDefPos.x, yStatusPos, paralysisDefPos.z}})
+  edit_button(BUTTON_ID.defStatusFrozen, { position={frozenDefPos.x, yStatusPos, frozenDefPos.z}})
+  edit_button(BUTTON_ID.defStatusConfuse, { position={confusedDefPos.x, yStatusPos, confusedDefPos.z}})
 end
 
+-- Applies cursed attacker.
 function applyCursedAttacker()
-  addStatus(ATTACKER, status_ids.curse, true)
+  addStatus(ATTACKER, status_ids.curse)
 end
 
+-- Applies burned attacker.
 function applyBurnedAttacker()
-  addStatus(ATTACKER, status_ids.burn, true)
+  addStatus(ATTACKER, status_ids.burn)
 end
 
+-- Applies poisoned attacker.
 function applyPoisonedAttacker()
-  addStatus(ATTACKER, status_ids.poison, true)
+  addStatus(ATTACKER, status_ids.poison)
 end
 
+-- Applies sleep attacker.
 function applySleepAttacker()
-  addStatus(ATTACKER, status_ids.sleep, true)
+  addStatus(ATTACKER, status_ids.sleep)
 end
 
+-- Applies paralyzed attacker.
 function applyParalyzedAttacker()
-  addStatus(ATTACKER, status_ids.paralyze, true)
+  addStatus(ATTACKER, status_ids.paralyze)
 end
 
+-- Applies frozen attacker.
 function applyFrozenAttacker()
-  addStatus(ATTACKER, status_ids.freeze, true)
+  addStatus(ATTACKER, status_ids.freeze)
 end
 
+-- Applies confusion attacker.
 function applyConfusionAttacker()
-  addStatus(ATTACKER, status_ids.confuse, true)
+  addStatus(ATTACKER, status_ids.confuse)
 end
 
+-- Applies cursed defender.
 function applyCursedDefender()
-  addStatus(DEFENDER, status_ids.curse, true)
+  addStatus(DEFENDER, status_ids.curse)
 end
 
+-- Applies burned defender.
 function applyBurnedDefender()
-  addStatus(DEFENDER, status_ids.burn, true)
+  addStatus(DEFENDER, status_ids.burn)
 end
 
+-- Applies poisoned defender.
 function applyPoisonedDefender()
-  addStatus(DEFENDER, status_ids.poison, true)
+  addStatus(DEFENDER, status_ids.poison)
 end
 
+-- Applies sleep defender.
 function applySleepDefender()
-  addStatus(DEFENDER, status_ids.sleep, true)
+  addStatus(DEFENDER, status_ids.sleep)
 end
 
+-- Applies paralyzed defender.
 function applyParalyzedDefender()
-  addStatus(DEFENDER, status_ids.paralyze, true)
+  addStatus(DEFENDER, status_ids.paralyze)
 end
 
+-- Applies frozen defender.
 function applyFrozenDefender()
-  addStatus(DEFENDER, status_ids.freeze, true)
+  addStatus(DEFENDER, status_ids.freeze)
 end
 
+-- Applies confusion defender.
 function applyConfusionDefender()
-  addStatus(DEFENDER, status_ids.confuse, true)
+  addStatus(DEFENDER, status_ids.confuse)
 end
 
 -- Helper function to print a table.

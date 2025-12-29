@@ -210,13 +210,10 @@ city_token_guids = { "53b66d", "4cc429", "62de78", "f0f9dd", "60db28", "543e9e" 
 pokecoin_counter_guids = { "b08b0e", "fe0861", "92cb92", "252975", "b15f1b", "68de04" }
 stupid_thing_guids = { "1452fa", "81e2ef", "8805c0", "fff686", "03f8b7", "135ed9" }
 -- These are a bit different since they only get deleted if both of the associated colors are not occupied.
-yellow_green_level_dice_bag_guid = "1a64da"
 yellow_green_status_token_bag_guid = "824d3c"
 yellow_green_rule_book_guid = "1f9df8"
-red_blue_level_dice_bag_guid = "3c7dbc"
 red_blue_status_token_bag_guid = "8e3fe3"
 red_blue_rule_book_guid = "04c930"
-purple_orange_level_dice_bag_guid = "4229ac"
 purple_orange_status_token_bag_guid = "6c4bb9"
 purple_orange_rule_book_guid = "7d5565"
 
@@ -273,7 +270,7 @@ end
 function beginSetup2(params)
     -- Keep track of the leaders we have already retrieved. Can't retrieve them twice, lol.
     -- Load the required map shenanigans. If this map has multiple Gyms (like Alola, some Gym Leaders will get taken during this step).
-    local leadersRetrieved = setup_map(params.selected_map, params.leadersGen, params.selectedGens)
+    local leadersRetrieved = setup_map(params.selected_map, params.leadersGen, params.selectedGens, params.level_increase_set)
 
     -- Check if we need to merge the TMs. setup_map() moves the filtered TM deck onto the table so this should be a save merge.
     if not params.filterTMs then
@@ -698,13 +695,6 @@ function beginSetup2(params)
 
         -- Check for a few items that are only removed if two colors are both unoccupied.
         if Player["Yellow"].steam_name == nil and Player["Green"].steam_name == nil then
-            -- Level Dice bag.
-            local obj = getObjectFromGUID(yellow_green_level_dice_bag_guid)
-            if obj then 
-                destroyObject(obj) 
-            else
-                print("WARNING: failed to delete the Yellow/Green Level Dice bag")
-            end
             -- Status Token bag.
             local obj = getObjectFromGUID(yellow_green_status_token_bag_guid)
             if obj then 
@@ -721,13 +711,6 @@ function beginSetup2(params)
             end
         end
         if Player["Red"].steam_name == nil and Player["Blue"].steam_name == nil then
-            -- Level Dice bag.
-            local obj = getObjectFromGUID(red_blue_level_dice_bag_guid)
-            if obj then 
-                destroyObject(obj) 
-            else
-                print("WARNING: failed to delete the Red/Blue Level Dice bag")
-            end
             -- Status Token bag.
             local obj = getObjectFromGUID(red_blue_status_token_bag_guid)
             if obj then 
@@ -744,13 +727,6 @@ function beginSetup2(params)
             end
         end
         if Player["Purple"].steam_name == nil and Player["Orange"].steam_name == nil then
-            -- Level Dice bag.
-            local obj = getObjectFromGUID(purple_orange_level_dice_bag_guid)
-            if obj then 
-                destroyObject(obj) 
-            else
-                print("WARNING: failed to delete the Purple/Orange Level Dice bag")
-            end
             -- Status Token bag.
             local obj = getObjectFromGUID(purple_orange_status_token_bag_guid)
             if obj then 
@@ -854,7 +830,7 @@ function get_ransei_badge_tint(gym_index)
     return "White"
 end
 
-function setup_map(selected_map_name, leadersGen, pokemonGens)
+function setup_map(selected_map_name, leadersGen, pokemonGens, levelIncreaseSet)
     -- Get a handle on the Map Manager.
     local map_manager = getObjectFromGUID(mapManagerGuid)
     if not map_manager then
@@ -1702,51 +1678,49 @@ function handle_evo_tokens(selected_gens)
         return
     end
 
-    -- Handle each selected gen.
+    -- Walk evo chains across gens, seeding with selected gens and exploring chained-in gens once.
+    local to_visit = {}
+    local seen = {}
     for gen = 1, 9 do
-        get_evo_tokens(gen, selected_gens)
-    end
-end
-
--- Helper function used to get the evo tokens required for a particular gen.
--- This function should only grab these tokens IFF that particular gen was not
--- actually chosen already.
-function get_evo_tokens(gen, selected_gens)
-    -- Sanitize the inputs a bit.
-    if gen < 1 or gen > 9 then
-        print("Invalid gen in get_evo_tokens: " .. tostring(gen))
-        return
+        if selected_gens[gen] then
+            table.insert(to_visit, gen)
+            seen[gen] = true
+        end
     end
 
-    -- If this gen was not enabled, we just skip it.
-    if not selected_gens[gen] then
-        return
-    end
+    while #to_visit > 0 do
+        local gen = table.remove(to_visit)
 
-    -- Get the pokemon data for this gen.
-    local gen_data = Global.call("getPokemonDataByGen", gen)
-    if not gen_data then
-        print("Failed to get gen data for gen " .. tostring(gen))
-        return
-    end
+        -- Get the pokemon data for this gen.
+        local gen_data = Global.call("getPokemonDataByGen", gen)
+        if not gen_data then
+            print("Failed to get gen data for gen " .. tostring(gen))
+        else
+            -- Loop through each Pokemon data entry in this gen.
+            for index=1, #gen_data do
+                -- Check if there is evoData.
+                local evo_data = gen_data[index].evoData
+                while evo_data ~= nil do
+                    for evo_index=1, #evo_data do
+                        local target_gen = evo_data[evo_index].gen
+                        if not selected_gens[target_gen] then
+                            for token_index=1, #(evo_data[evo_index].guids) do
+                                -- Get the evo tokens required for this token, if any.
+                                get_evo_token(target_gen, evo_data[evo_index].ball, evo_data[evo_index].guids[token_index])
+                            end
 
-    -- Loop through each Pokemon data entry in this gen.
-    for index=1, #gen_data do
-        -- Check if there is evoData.
-        local evo_data = gen_data[index].evoData
-        while evo_data ~= nil do
-            -- If this evoData gen was already selected then we can skip it.
-            for evo_index=1, #evo_data do
-                if not selected_gens[evo_data[evo_index].gen] then
-                    for token_index=1, #(evo_data[evo_index].guids) do
-                        -- Get the evo tokens required for this token, if any.
-                        get_evo_token(evo_data[evo_index].gen, evo_data[evo_index].ball, evo_data[evo_index].guids[token_index])
+                            -- Explore this gen once so we can pick up its downstream evoData (e.g., Megas).
+                            if not seen[target_gen] then
+                                seen[target_gen] = true
+                                table.insert(to_visit, target_gen)
+                            end
+                        end
                     end
+
+                    -- Get the next evoData.
+                    evo_data = evo_data.evoData
                 end
             end
-
-            -- Get the next evoData.
-            evo_data = evo_data.evoData
         end
     end
 end
@@ -1755,6 +1729,16 @@ end
 -- Since a previous token for this same Pokemon may have already grabbed the required tokens,
 -- this function should be error tolerant to an extent.
 function get_evo_token(gen, ball_index, guid)
+    -- Skip Fossil evo tokens in this flow.
+    if ball_index == 8 then
+        return false
+    end
+
+    -- Only standard evo balls are used here.
+    if ball_index < 1 or ball_index > #evoPokeballs then
+        return false
+    end
+
     -- Get the destination ball GUID.
     local evo_pokeball = getObjectFromGUID(evoPokeballs[ball_index])
     if not evo_pokeball then

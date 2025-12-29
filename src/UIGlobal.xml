@@ -139,6 +139,9 @@
                 <Toggle id="setGymLeaderBoosters" onValueChanged="gymLeaderBoostersSet" interactable="true">Gym Leader Boosters (45% chance)</Toggle>
                 <Toggle id="setHpRule2" onValueChanged="hpRule2Set" interactable="true">HP Rule 2</Toggle>
             </HorizontalLayout>
+            <HorizontalLayout spacing="15" childForceExpandHeight="false">
+                <Toggle id="setLevelIncrease" onValueChanged="levelIncreaseSet" interactable="true">Increase Level Cap</Toggle>
+            </HorizontalLayout>
         </VerticalLayout>
 
         <!-- Divider. -->

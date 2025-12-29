@@ -302,6 +302,15 @@ GYM_BOOSTERS_INFO = {
   CARD_INFO.guard_spec,
 }
 
+GYM_ONE_TIME_BOOSTERS_INFO = {
+  -- Boosters.
+  CARD_INFO.x_attack,
+  CARD_INFO.x_defense,
+  CARD_INFO.x_accuracy,
+  CARD_INFO.dire_hit,
+  CARD_INFO.guard_spec,
+}
+
 --------------------------------------------
 -- Functions
 --------------------------------------------
@@ -428,6 +437,11 @@ end
 -- Helper function to get booster info.
 function get_gym_booster_info()
   return GYM_BOOSTERS_INFO
+end
+
+-- Helper function to get booster info.
+function get_one_time_gym_booster_info()
+  return GYM_ONE_TIME_BOOSTERS_INFO
 end
 
 -- Helper function to print a table.

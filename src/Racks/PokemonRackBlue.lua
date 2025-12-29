@@ -3,7 +3,6 @@
 --------------------------------------------------------------------------------
 local playerColour = "Blue"
 
-local diceBagGUID = "3c7dbc"
 local figureGUID = "f99b44"
 RECORD_KEEPER_GUID = "ab319d"
 
@@ -261,7 +260,6 @@ function checkLevel(index, modifier, evolving)
         itemZPos = itemZPos,
         pokemonXPos = pokemonXPos,
         pokemonZPos = pokemonZPos,
-        diceBagGUID = diceBagGUID,
         yRotRecall = yRotRecall,
         playerColour = playerColour,
         yLoc = yLoc,

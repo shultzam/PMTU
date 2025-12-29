@@ -3,6 +3,7 @@
 -- Should live at {97.41, 1.96, 39.36}
 
 Pokedex_API_BASE = "https://pmtu-Pokedex.com/api"
+local LEADERBOARD_LOOKUP_LIMIT = 100
 
 -- Gets Steam identity (ID and name) from player color.
 local function getSteamIdentityFromColor(player_color)
@@ -64,6 +65,45 @@ local REGISTER_REQUEST_INTERVAL = 0.25
 local registerQueue = {}
 local registerInFlight = false
 
+-- After registering, print the player's leaderboard rank if they already appear on the completion list.
+local function printPlayerLeaderboardRank(steam_id, steam_name, color)
+  if not steam_id then return end
+  local url = Pokedex_API_BASE .. "/v1/leaderboard/completion?limit=" .. tostring(LEADERBOARD_LOOKUP_LIMIT)
+
+  WebRequest.get(url, function(req)
+    local okReq, err = requestOk(req)
+    if not okReq then
+      return
+    end
+
+    local ok, data = pcall(JSON.decode, req.text)
+    if not ok or not data then
+      return
+    end
+
+    local entries = data.entries or {}
+
+    for i, e in ipairs(entries) do
+      if tostring(e.steam_id) == tostring(steam_id) then
+        local name = e.steam_name_safe or e.steam_name or steam_name or "Unknown"
+        local unique = tonumber(e.unique_species)
+        local unique_display = unique or "N/A"
+
+        logPokedexInfo(
+          string.format(
+            "%s is currently #%d on the PMTU completion leaderboard: %s",
+            name,
+            i,
+            unique_display
+          ),
+          color
+        )
+        return
+      end
+    end
+  end)
+end
+
 local function popRegisterQueue()
   if registerInFlight then return end
   if #registerQueue == 0 then return end
@@ -93,6 +133,7 @@ local function popRegisterQueue()
     end
 
     logPokedexInfo("registered " .. (data.steam_name_safe or task.steam_name) .. " (" .. task.steam_id .. ") into the PMTU Pokédex", task.color)
+    printPlayerLeaderboardRank(task.steam_id, data.steam_name_safe or task.steam_name, task.color)
 
     registerInFlight = false
     Wait.time(popRegisterQueue, REGISTER_REQUEST_INTERVAL)

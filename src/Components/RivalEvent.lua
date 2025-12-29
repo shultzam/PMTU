@@ -36,7 +36,7 @@ local musicOptionButtons = {}
 local autoRollerOptionX = -30.0
 local autoRollerOptionZ = 8.0
 local currentAutoRollerIndex = 0
-local autoRollersTable = { [0] = "No AutoRoller", [1] = "AutoRoller Logs", [2] = "AutoRoller Dice"  } -- [3] = "Simulate Logs (beta)"
+local autoRollersTable = { [0] = "No AutoRoller", [1] = "AutoRoller Logs", [2] = "AutoRoller Dice"  }
 
 -- Turn Counter fields.
 -- NOTE: you can't stop me.
