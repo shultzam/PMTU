@@ -1734,6 +1734,12 @@ function get_evo_token(gen, ball_index, guid)
         return false
     end
 
+    -- Skip missing or non-standard ball indexes.
+    if ball_index == nil then
+        print("Cannot grab evo for guid " .. tostring(guid) .. "; please report this to the developers")
+        return false
+    end
+
     -- Only standard evo balls are used here.
     if ball_index < 1 or ball_index > #evoPokeballs then
         return false
