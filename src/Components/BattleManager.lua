@@ -1894,7 +1894,7 @@ function selectMove(index, isAttacker, isRandom)
     local opponentPokemon = isAttacker and defenderPokemon or attackerPokemon
     if opponentPokemon and opponentPokemon.status ~= nil then
       pokemonData.attackValue.effect = 1
-      local pokemon_name = isAttacker and attacker_pokemon_name or defender_pokemon_name
+      local pokemon_name = getPokemonNameInPlay(isAttacker)
       printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
     end
   end
@@ -5816,7 +5816,11 @@ function onObjectEnterScriptingZone(zone, object)
     local moveIndex = tonumber(attackerData.selectedMoveIndex)
     if attackerPokemon and attackerPokemon.movesData and moveIndex and moveIndex >= 1 then
       local attackerMoveData = attackerPokemon.movesData[moveIndex]
-      if moveHasEffect(attackerMoveData, status_ids.conditionBoost) and attackerData and attackerData.attackValue.effect == 0 then
+      local attacker_move_is_immune = isOpponentImmuneToMove(attackerMoveData, defenderPokemon)
+      if attackerPokemon and attackerPokemon.teraActive == true and attackerPokemon.teraType == "Stellar" then
+        attacker_move_is_immune = false
+      end
+      if not attacker_move_is_immune and moveHasEffect(attackerMoveData, status_ids.conditionBoost) and attackerData and attackerData.attackValue.effect == 0 then
         attackerData.attackValue.effect = 1
         local pokemon_name = getPokemonNameInPlay(ATTACKER)
         printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
@@ -5869,7 +5873,11 @@ function onObjectEnterScriptingZone(zone, object)
     local moveIndex = tonumber(defenderData.selectedMoveIndex)
     if defenderPokemon and defenderPokemon.movesData and moveIndex and moveIndex >= 1 then
       local defenderMoveData = defenderPokemon.movesData[moveIndex]
-      if moveHasEffect(defenderMoveData, status_ids.conditionBoost) and defenderData and defenderData.attackValue.effect == 0 then
+      local defender_move_is_immune = isOpponentImmuneToMove(defenderMoveData, attackerPokemon)
+      if defenderPokemon and defenderPokemon.teraActive == true and defenderPokemon.teraType == "Stellar" then
+        defender_move_is_immune = false
+      end
+      if not defender_move_is_immune and moveHasEffect(defenderMoveData, status_ids.conditionBoost) and defenderData and defenderData.attackValue.effect == 0 then
         defenderData.attackValue.effect = 1
         local pokemon_name = getPokemonNameInPlay(DEFENDER)
         printToAll("Adjusting "  .. pokemon_name .. "'s Attack Strength by 1 for the Condition Boost effect.")
@@ -7260,30 +7268,6 @@ function updateAutoRollButtons(isAttacker)
     edit_button(BUTTON_ID.autoRollDefWhite, { label=defAutoRollCounts.white})
     edit_button(BUTTON_ID.autoRollDefPurple, { label=atkAutoRollCounts.purple})
   end
-end
-
--- Simple helper function to help with printing Pokemon logs.
-function constructPokemonName(isAttacker)
-  -- Collect some info.
-  local data = isAttacker and attackerData or defenderData
-  local pokemon_name = isAttacker and attackerPokemon.name or defenderPokemon.name
-
-  -- Construct the name based on the type.
-  if data.type == PLAYER then
-    local player_name = data.playerColor
-    if Player[data.playerColor].steam_name ~= nil then
-      player_name = Player[data.playerColor].steam_name
-    end
-    pokemon_name = player_name .. "'s " .. pokemon_name
-  elseif data.type == GYM or data.type == RIVAL then
-    pokemon_name = data.trainerName .. "'s " .. pokemon_name
-  elseif data.type == WILD then
-    pokemon_name = "Wild " .. pokemon_name
-  elseif data.type == TRAINER then
-    pokemon_name = "Trainer's " .. pokemon_name
-  end
-  
-  return pokemon_name
 end
 
 -- Helper function to clear Field Effects for a said (or both, if isAttacker is nil).
